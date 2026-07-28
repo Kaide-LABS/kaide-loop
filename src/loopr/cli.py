@@ -77,15 +77,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     if store.exists():
         print(f"state already exists at {store.path}", file=sys.stderr)
         return exit_codes.USAGE
-    state = InterrogationState(
-        mode=Mode(args.mode),
-        repo_root=str(Path(args.repo).resolve()),
-        max_rounds=args.max_rounds,
-    )
-    if state.mode == Mode.BROWNFIELD:
+    mode = Mode(args.mode)
+    brownfield = None
+    if mode == Mode.BROWNFIELD:
         from loopr.models.brownfield import BrownfieldState
 
-        state.brownfield = BrownfieldState()
+        brownfield = BrownfieldState()
+    state = InterrogationState(
+        mode=mode,
+        repo_root=str(Path(args.repo).resolve()),
+        max_rounds=args.max_rounds,
+        brownfield=brownfield,
+    )
     store.save(state)
     print(f"initialised {store.path}")
     return exit_codes.OK

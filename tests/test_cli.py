@@ -107,3 +107,18 @@ def test_init_refuses_to_overwrite_existing_state(tmp_path: Path) -> None:
     assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
     code = main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)])
     assert code == exit_codes.USAGE
+
+
+def test_init_brownfield_mode_succeeds(tmp_path: Path) -> None:
+    """Regression: cmd_init used to construct InterrogationState(mode=BROWNFIELD, ...) before
+    setting .brownfield, but check_mode_coherent validates at construction time -- brownfield init
+    crashed unconditionally. brownfield must be built and passed into the single constructor call."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    state_path = tmp_path / "state.json"
+
+    code = main(["init", "--repo", str(repo), "--mode", "brownfield", "--state", str(state_path)])
+    assert code == exit_codes.OK
+
+    state = StateStore(state_path).load()
+    assert state.brownfield is not None
