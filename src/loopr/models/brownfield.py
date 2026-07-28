@@ -13,7 +13,7 @@ from pydantic import Field
 from loopr.models.common import Centrality, LooprBase, Verdict
 
 
-class EvidenceBundle(LooprBase):
+class EvidenceBundle(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     pattern_id: str = Field(min_length=1)
     description: str = Field(min_length=1)
     locations: list[str] = Field(min_length=1)
@@ -27,13 +27,13 @@ class EvidenceBundle(LooprBase):
     signal_qualifiers: list[str] = Field(default_factory=list)
 
 
-class PatternClassification(LooprBase):
+class PatternClassification(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     pattern_id: str = Field(min_length=1)
     verdict: Verdict
     reason: str = Field(min_length=1)
 
 
-class BrownfieldState(LooprBase):
+class BrownfieldState(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     touched_surface: list[str] = Field(default_factory=list)
     touched_surface_confirmed_hash: str | None = None
     pattern_candidates: list[EvidenceBundle] = Field(default_factory=list)

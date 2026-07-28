@@ -22,6 +22,7 @@ packages = ["src/loopr"]
 python_version = "3.14"
 strict = true
 warn_unreachable = true
+disallow_any_explicit = true
 plugins = []
 
 [tool.pytest.ini_options]

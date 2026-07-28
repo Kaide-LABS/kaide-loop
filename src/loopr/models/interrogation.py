@@ -17,18 +17,18 @@ from loopr.models.common import (
 from loopr.models.gates import GateRecord
 
 
-class AcceptanceCriterion(LooprBase):
+class AcceptanceCriterion(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     text: str = Field(min_length=1)
     judge_confirmed_testable: bool = False
 
 
-class ScopeEdge(LooprBase):
+class ScopeEdge(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     item: str = Field(min_length=1)
     kind: ScopeEdgeKind
     reason: str = Field(min_length=1)
 
 
-class Boundary(LooprBase):
+class Boundary(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     text: str = Field(min_length=1)
     confirmed: bool = False
     confirmed_hash: str | None = None
@@ -43,12 +43,12 @@ class Boundary(LooprBase):
         return self
 
 
-class ContextNote(LooprBase):
+class ContextNote(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     text: str = Field(min_length=1)
     source: NoteSource
 
 
-class OpenQuestion(LooprBase):
+class OpenQuestion(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     id: str = Field(min_length=1)
     text: str = Field(min_length=1)
     origin: QuestionOrigin
@@ -66,13 +66,13 @@ class OpenQuestion(LooprBase):
         return self
 
 
-class Assumption(LooprBase):
+class Assumption(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     text: str = Field(min_length=1)
     source_question_id: str = Field(min_length=1)
     created_round: int = Field(ge=1)
 
 
-class ConditionResult(LooprBase):
+class ConditionResult(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     condition: ConditionId
     structural_pass: bool
     judge_pass: bool | None
@@ -93,7 +93,7 @@ class ConditionResult(LooprBase):
         return self
 
 
-class InterrogationState(LooprBase):
+class InterrogationState(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     schema_version: int = 1
     mode: Mode
     repo_root: str

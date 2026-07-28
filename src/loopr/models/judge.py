@@ -40,7 +40,7 @@ class JudgeScopeError(ValueError):
     """Raised when a JudgeRequest's inputs do not exactly match its call type's allowed scope."""
 
 
-class JudgeRequest(LooprBase):
+class JudgeRequest(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     model_config = ConfigDict(
         extra="forbid",
         validate_assignment=True,
@@ -69,7 +69,7 @@ class JudgeRequest(LooprBase):
         return self
 
 
-class JudgeResponse(LooprBase):
+class JudgeResponse(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     call_id: str = Field(min_length=1)
     passed: bool | None = None
     verdict: Verdict | None = None
@@ -96,7 +96,7 @@ class JudgeResponse(LooprBase):
         return self
 
 
-class JudgeExchange(LooprBase):
+class JudgeExchange(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     request: JudgeRequest
     response: JudgeResponse
     request_sha256: str = Field(min_length=1)

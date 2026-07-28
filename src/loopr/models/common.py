@@ -7,7 +7,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict
 
 
-class LooprBase(BaseModel):
+class LooprBase(BaseModel):  # type: ignore[explicit-any]  # pydantic's own ConfigDict TypedDict carries Any-typed fields (e.g. json_encoders); no real Any in loopr code
     """Base for every loopr model. extra='forbid' is set once here and inherited everywhere."""
 
     model_config = ConfigDict(

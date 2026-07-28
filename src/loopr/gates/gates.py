@@ -17,7 +17,7 @@ from loopr.models.gates import GatePayload, GateRecord
 from loopr.models.interrogation import Boundary, InterrogationState
 
 
-class GateResponse(LooprBase):
+class GateResponse(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
     gate: GateId
     confirmed: bool
     payload_digest: str = Field(min_length=1)
