@@ -1,0 +1,17 @@
+.env
+.loop-logs/
+LOOP_STATUS.json
+LOOP_LAST_EXIT.txt
+*.token
+__no_project_mounted__/
+__no_gh_config__/
+node_modules/
+
+# loopr Python module (PHASE_1_SPEC.md SS1.1)
+.loopr-state/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+.coverage
