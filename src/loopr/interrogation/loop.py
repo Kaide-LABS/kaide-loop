@@ -108,6 +108,9 @@ def _apply_judge_exchange(
             from loopr.models.interrogation import AcceptanceCriterion
 
             state.acceptance_criteria.append(AcceptanceCriterion(text=note_text))
+            # Relocated, not duplicated: the note now lives in acceptance_criteria, so it must not
+            # also stand in context_notes -- otherwise the same content renders into both artifacts.
+            state.context_notes = [note for note in state.context_notes if note.text != note_text]
     elif request.call_type == JudgeCallType.C6_LOAD_BEARING:
         question_text = request.inputs.get("question_text")
         for question in state.open_questions:
