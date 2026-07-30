@@ -67,6 +67,56 @@ def test_gate_2_decline_sets_escape_hatch(greenfield_state: InterrogationState) 
     assert greenfield_state.boundary.declined is True
 
 
+def test_apply_gate_response_raises_when_no_gate_pending(greenfield_state: InterrogationState) -> None:
+    import pytest
+
+    response = GateResponse(gate=GateId.GATE_1_BABY_PRD, confirmed=True, payload_digest="x")
+    with pytest.raises(ValueError, match="no gate request pending"):
+        apply_gate_response(greenfield_state, response)
+
+
+def test_gate_2_decline_after_prior_confirm_unconfirms_existing_boundary(
+    greenfield_state: InterrogationState,
+) -> None:
+    payload = build_gate_payload(GateId.GATE_2_BOUNDARY, "t", render_gate_2_body(greenfield_state))
+    request_gate(greenfield_state, payload)
+    confirm_response = GateResponse(
+        gate=GateId.GATE_2_BOUNDARY,
+        confirmed=True,
+        payload_digest=payload.digest,
+        boundary_text="v1 boundary",
+    )
+    apply_gate_response(greenfield_state, confirm_response)
+    assert greenfield_state.boundary is not None
+    assert greenfield_state.boundary.confirmed is True
+
+    decline_response = GateResponse(
+        gate=GateId.GATE_2_BOUNDARY, confirmed=False, payload_digest="stale", declined=True
+    )
+    apply_gate_response(greenfield_state, decline_response)
+    assert greenfield_state.boundary is not None
+    assert greenfield_state.boundary.declined is True
+    assert greenfield_state.boundary.confirmed is False
+
+
+def test_gate_2_touched_surface_updates_brownfield_state(
+    brownfield_state: InterrogationState,
+) -> None:
+    payload = build_gate_payload(GateId.GATE_2_BOUNDARY, "t", render_gate_2_body(brownfield_state))
+    request_gate(brownfield_state, payload)
+    response = GateResponse(
+        gate=GateId.GATE_2_BOUNDARY,
+        confirmed=True,
+        payload_digest=payload.digest,
+        boundary_text="brownfield boundary",
+        touched_surface=["a.py", "b.py"],
+    )
+    apply_gate_response(brownfield_state, response)
+    assert brownfield_state.brownfield is not None
+    assert brownfield_state.brownfield.touched_surface == ["a.py", "b.py"]
+    assert brownfield_state.brownfield.touched_surface_confirmed_hash is not None
+
+
 def test_gate_3_only_conflicts_in_payload(brownfield_state: InterrogationState) -> None:
     from loopr.gates.gates import render_gate_3_body
     from loopr.models.brownfield import PatternClassification

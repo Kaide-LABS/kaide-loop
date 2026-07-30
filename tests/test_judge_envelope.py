@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from loopr.judge.envelope import digest, make_call_id, read_request, write_request
+from loopr.judge.envelope import digest, make_call_id, read_request, read_response, write_request, write_response
 from loopr.models.common import JudgeCallType
-from loopr.models.judge import JudgeRequest
+from loopr.models.judge import JudgeRequest, JudgeResponse
 
 
 def test_call_id_is_deterministic() -> None:
@@ -46,3 +46,11 @@ def test_write_and_read_request_roundtrip(tmp_path: Path) -> None:
     write_request(path, request)
     loaded = read_request(path)
     assert loaded == request
+
+
+def test_write_and_read_response_roundtrip(tmp_path: Path) -> None:
+    response = JudgeResponse(call_id="abc", passed=True, reason="ok")
+    path = tmp_path / "judge_response.json"
+    write_response(path, response)
+    loaded = read_response(path)
+    assert loaded == response

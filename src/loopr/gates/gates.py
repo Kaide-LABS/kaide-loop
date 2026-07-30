@@ -81,8 +81,11 @@ def _apply_gate_2(state: InterrogationState, response: GateResponse) -> None:
         if state.boundary is None:
             state.boundary = Boundary(text="(no boundary)", declined=True)
         else:
-            state.boundary.declined = True
+            # Order matters under validate_assignment=True, same as the confirm path below:
+            # check_confirmation_coherent forbids confirmed and declined both True, so declining an
+            # already-confirmed boundary must clear confirmed BEFORE setting declined, not after.
             state.boundary.confirmed = False
+            state.boundary.declined = True
         return
 
     if response.boundary_text is not None:
