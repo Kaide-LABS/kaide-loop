@@ -29,17 +29,30 @@ from loopr.state.store import StateStore
 
 class ResumingJudgeClient:
     """Answers exactly one pending request from a preloaded response; anything else falls back to
-    writing a fresh pending envelope and suspending -- never a live model call."""
+    writing a fresh pending envelope and suspending -- never a live model call.
+
+    A preloaded response is only ever matched against the FIRST judge.ask() call made inside a given
+    step() invocation. step()'s brownfield precondition block (relevance/classification) can issue
+    its own judge.ask() before the call the caller actually meant to answer ever gets a turn -- if
+    that happens, `used` stays False and `diverged_request` records what got asked instead, so the
+    caller (cmd_step) can raise loudly rather than silently losing the supplied response."""
 
     def __init__(self, pending_path: Path, preloaded: JudgeResponse | None) -> None:
         self._pending_path = pending_path
         self._preloaded = preloaded
         self._used = False
+        self.diverged_request: JudgeRequest | None = None
+
+    @property
+    def used(self) -> bool:
+        return self._used
 
     def ask(self, request: JudgeRequest) -> JudgeResponse | None:
         if self._preloaded is not None and not self._used and self._preloaded.call_id == request.call_id:
             self._used = True
             return self._preloaded
+        if self._preloaded is not None and not self._used and self.diverged_request is None:
+            self.diverged_request = request
         from loopr.judge.envelope import write_request
 
         write_request(self._pending_path, request)
@@ -146,6 +159,22 @@ def cmd_step(args: argparse.Namespace) -> int:
     _clear_pending(state_dir)
     client = ResumingJudgeClient(judge_p, preloaded_response)
     outcome = step(state, client, inbound)
+
+    if preloaded_response is not None and not client.used:
+        diverged = client.diverged_request
+        diverged_desc = (
+            f"call_id={diverged.call_id!r} call_type={diverged.call_type.value!r}"
+            if diverged is not None
+            else "(no other call was made)"
+        )
+        raise LooprError(
+            f"judge response call_id={preloaded_response.call_id!r} was never applied: a different "
+            f"judge call became pending first this invocation ({diverged_desc}). The supplied "
+            "response was discarded rather than silently applied elsewhere -- re-invoke `step` with "
+            "no --judge-response to see the newly pending request, answer it, then resupply this "
+            "response once its call becomes the active pending call."
+        )
+
     store.save(outcome.state)
 
     if outcome.exit_code == exit_codes.GATE_REQUIRED and outcome.pending_gate_payload is not None:
