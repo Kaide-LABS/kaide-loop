@@ -1,0 +1,281 @@
+{
+  "acceptance_criteria": [
+    {
+      "judge_confirmed_testable": true,
+      "text": "Feed it a saved lecture transcript containing at least one deliberately ambiguous/garbled passage. Check, by direct inspection: (1) segment boundaries match an independently human-marked reference within [tolerance] / a reviewer agrees each segment is coherent; (2) every ruling is phrased as reported speech attributed to the speaker, never asserted as fact; (3) every citation string-matches the transcript verbatim or is omitted -- checked against the transcript, not external canon; (4) the deliberately-ambiguous passage is explicitly flagged, not smoothed over."
+    },
+    {
+      "judge_confirmed_testable": true,
+      "text": "Watch-out: this is being judged specifically on trustworthiness for religious content, not just summarization quality. Never let the model fabricate -- if it's not confident about a ruling or a citation, it must flag the passage rather than smooth it into something plausible-sounding. A subtly wrong ruling or a garbled citation is a worse failure than an incomplete summary."
+    }
+  ],
+  "assumptions": [],
+  "boundary": {
+    "confirmed": true,
+    "confirmed_hash": "1b2969309a3dae0781bd65c44140bf54484f08112e5e5f41882ea25663e05adb",
+    "declined": false,
+    "text": "This project builds only the deterministic core: ingesting a saved transcript file and producing a structured, citation-faithful summary -- segmentation, the summarization pipeline, the output schema, and the correctness rules governing rulings and citations. Anything requiring a live third-party surface (Zoom SDK, an STT provider, meeting-join auth, or any network call to capture live audio) is out of scope for this build and belongs to a later, separate integration project."
+  },
+  "brownfield": null,
+  "condition_results": [
+    {
+      "condition": "c1_outcome",
+      "detail": "judge verdict reused: Names a concrete outcome (an accurate, structured, citation-faithful summary) and a beneficiary (someone reviewing a missed lecture), rather than prescribing an implementation as the primary subject.",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c2_acceptance",
+      "detail": "judge verdict reused: The first criterion's sub-checks (reported-speech attribution, verbatim citation matching, explicit flagging) remain independently checkable by inspection; that alone satisfies the rubric's 'at least one' bar. The second (folded-in) criterion restates the same testable content in narrative form rather than adding a new subjective standard.",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c3_scope_edges",
+      "detail": "judge verdict reused: Names concrete boundary objects (Zoom SDK, an STT provider, a network call to join a meeting) rather than a vague exclusion, and even supplies a mechanical tripwire (any such dependency appearing in the repo) a builder could check unambiguously.",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c4_boundary",
+      "detail": "boundary confirmed and hash matches current text",
+      "judge_pass": null,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c5_soft_context",
+      "detail": "at least one note judge-confirmed as genuine soft context",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c6_no_unknowns",
+      "detail": "structural pass and all items already judge-confirmed",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    }
+  ],
+  "consecutive_judge_failures": {
+    "c1_outcome": 0
+  },
+  "context_notes": [
+    {
+      "source": "stated",
+      "text": "Watch-out: this is being judged specifically on trustworthiness for religious content, not just summarization quality. Never let the model fabricate -- if it's not confident about a ruling or a citation, it must flag the passage rather than smooth it into something plausible-sounding. A subtly wrong ruling or a garbled citation is a worse failure than an incomplete summary."
+    },
+    {
+      "source": "stated",
+      "text": "Not a clean slate \u2014 one real soft-context item: output register has to match the seriousness of religious content. A summary can pass every hard check in condition 2 and still fail if a ruling is rendered in casual or glib phrasing \u2014 the attribution and citation being technically correct doesn't excuse a tone that trivializes it. That's the thing to capture, separate from anything condition 2 already checks.\n\nNo consent/distribution concern to add \u2014 I'm the only one consuming this, nothing gets shared, so that's out of scope, not deferred."
+    }
+  ],
+  "gates": {
+    "gate_1_baby_prd": {
+      "confirmed": true,
+      "confirmed_payload_digest": "b4b1be18066f6a14c3e0729d11733bb4f5a5961e1f830cc578e6763cb760eafe",
+      "gate": "gate_1_baby_prd",
+      "payload_digest": "b4b1be18066f6a14c3e0729d11733bb4f5a5961e1f830cc578e6763cb760eafe",
+      "requested_round": 6,
+      "user_amendment": null
+    },
+    "gate_2_boundary": {
+      "confirmed": true,
+      "confirmed_payload_digest": "a59265c41d13035f560587ac93656186cbdc45352e7d72e07e8b4b20c919567c",
+      "gate": "gate_2_boundary",
+      "payload_digest": "a59265c41d13035f560587ac93656186cbdc45352e7d72e07e8b4b20c919567c",
+      "requested_round": 4,
+      "user_amendment": null
+    }
+  },
+  "judge_log": [
+    {
+      "answered_at_round": 2,
+      "request": {
+        "call_id": "9519ee39603908a9",
+        "call_type": "c1_outcome",
+        "created_round": 2,
+        "envelope_version": 1,
+        "inputs": {
+          "prefilter_flagged": false,
+          "problem_statement": "A saved transcript of an Islamic lecture I couldn't attend live becomes an accurate, structured summary -- segmented, faithful to the source, with rulings and citations preserved exactly as spoken -- so I can review what was taught without having to watch the recording."
+        },
+        "rubric_id": "c1_outcome_v1",
+        "rubric_text": "Does this statement describe a desired real-world outcome/result (what becomes true when this is done, for whom), or does it prescribe a specific solution/implementation as the primary subject? Pass only if a concrete outcome is named. A stated solution is acceptable ONLY if it is explicitly subordinate to a stated outcome (e.g. 'I want X to happen; my current guess at how is Y' passes -- 'Y' alone does not)."
+      },
+      "request_sha256": "af02ad693cbe5d34e9ff5fd98b3170dd4143098065950d342b87345088bad70e",
+      "response": {
+        "call_id": "9519ee39603908a9",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "Names a concrete outcome (an accurate, structured, citation-faithful summary) and a beneficiary (someone reviewing a missed lecture), rather than prescribing an implementation as the primary subject.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "ba0bbdd86f5084772e9c9d0a6f8d5603085b2d8790c3a4c103257784f98262f9"
+    },
+    {
+      "answered_at_round": 3,
+      "request": {
+        "call_id": "d4d79af8b438cbfc",
+        "call_type": "c2_acceptance",
+        "created_round": 3,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "Feed it a saved lecture transcript containing at least one deliberately ambiguous/garbled passage. Check, by direct inspection: (1) segment boundaries match an independently human-marked reference within [tolerance] / a reviewer agrees each segment is coherent; (2) every ruling is phrased as reported speech attributed to the speaker, never asserted as fact; (3) every citation string-matches the transcript verbatim or is omitted -- checked against the transcript, not external canon; (4) the deliberately-ambiguous passage is explicitly flagged, not smoothed over."
+          ]
+        },
+        "rubric_id": "c2_acceptance_v1",
+        "rubric_text": "For each acceptance criterion, could a third party who did not build the system check it by observation or a concrete test, without needing to ask the builder for a judgment call? Pass only if at least one criterion is independently checkable this way. Reject criteria that are purely subjective ('feels fast', 'is good') with no observable proxy."
+      },
+      "request_sha256": "5890e9509f57d4743aee2c3dbc32c50dfa0aab4f36e178253738c16577226fac",
+      "response": {
+        "call_id": "d4d79af8b438cbfc",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "At least three sub-checks (reported-speech attribution of rulings, verbatim citation string-matching against the transcript, explicit flagging of the seeded ambiguous passage) are independently checkable by inspection, no builder judgment required. Note: the segmentation sub-check's '[tolerance]' is an unresolved placeholder -- not gating this pass since the other sub-checks already satisfy the criterion, but worth the builder tightening later.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "609fe3b9bc5bdf296d542467f4f5f8ce8373584dfc032e2bbba31994ba28ec69"
+    },
+    {
+      "answered_at_round": 4,
+      "request": {
+        "call_id": "1e3af629b67a4aee",
+        "call_type": "c3_scope_edges",
+        "created_round": 4,
+        "envelope_version": 1,
+        "inputs": {
+          "scope_edges": [
+            {
+              "item": "Live Zoom integration is out of scope for now -- joining meetings, audio capture, the speech-to-text API call, and auth are deferred to a later, separate build. This project takes a saved transcript file as input, not live audio. Tripwire: any dependency on Zoom's SDK, an STT provider, or a network call to join a meeting appearing in this repo means scope has crept -- that code belongs in the later integration build, not here.",
+              "kind": "out",
+              "reason": "user-stated"
+            }
+          ]
+        },
+        "rubric_id": "c3_scope_edges_v1",
+        "rubric_text": "Is each named edge specific enough that a builder reading it later would know unambiguously whether a new request falls inside or outside it? Reject vague edges ('nothing fancy', 'basic stuff only') that don't name a concrete boundary object (a feature, an integration, a scale threshold, a user segment)."
+      },
+      "request_sha256": "42103a0e943d4018f645a554d4c55fc9a5a2eb7d63e911e9b3a62638d8f8ab34",
+      "response": {
+        "call_id": "1e3af629b67a4aee",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "Names concrete boundary objects (Zoom SDK, an STT provider, a network call to join a meeting) rather than a vague exclusion, and even supplies a mechanical tripwire (any such dependency appearing in the repo) a builder could check unambiguously.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "920083e530941f6636e3f5521b1cfc385351d3ac7859d188fc2bd016f0e5569a"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "0996e70c25d469fc",
+        "call_type": "c5_soft_context",
+        "created_round": 5,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "Feed it a saved lecture transcript containing at least one deliberately ambiguous/garbled passage. Check, by direct inspection: (1) segment boundaries match an independently human-marked reference within [tolerance] / a reviewer agrees each segment is coherent; (2) every ruling is phrased as reported speech attributed to the speaker, never asserted as fact; (3) every citation string-matches the transcript verbatim or is omitted -- checked against the transcript, not external canon; (4) the deliberately-ambiguous passage is explicitly flagged, not smoothed over."
+          ],
+          "context_note": "Watch-out: this is being judged specifically on trustworthiness for religious content, not just summarization quality. Never let the model fabricate -- if it's not confident about a ruling or a citation, it must flag the passage rather than smooth it into something plausible-sounding. A subtly wrong ruling or a garbled citation is a worse failure than an incomplete summary."
+        },
+        "rubric_id": "c5_soft_context_v1",
+        "rubric_text": "Given the current acceptance criteria list, does this note change how the finished build would be JUDGED (accepted/rejected) without being expressible as a testable spec requirement? If it IS expressible as one of the existing or a new acceptance criterion, it belongs there, not here -- flag as misplaced rather than failing outright."
+      },
+      "request_sha256": "0f8310f3e85ac99f7d046b648ce6eb56bd7d9ed2f63a36ab0f0e010fb9484bf8",
+      "response": {
+        "call_id": "0996e70c25d469fc",
+        "misplaced": true,
+        "missing": null,
+        "passed": false,
+        "reason": "This note is expressible as a testable acceptance criterion rather than soft context -- it restates the existing criterion's own content (reported-speech attribution, verbatim-or-omit citations, explicit flagging of uncertain passages) rather than adding a judged-a-failure-even-if-technically-correct dimension outside the spec. Flagging misplaced per the rubric rather than failing outright.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "987a4b6c32f25bb4f25afe6c37bb43385a31f3089e629e34d606a8548109f691"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "ba1e0d2c4975a776",
+        "call_type": "c2_acceptance",
+        "created_round": 5,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "Feed it a saved lecture transcript containing at least one deliberately ambiguous/garbled passage. Check, by direct inspection: (1) segment boundaries match an independently human-marked reference within [tolerance] / a reviewer agrees each segment is coherent; (2) every ruling is phrased as reported speech attributed to the speaker, never asserted as fact; (3) every citation string-matches the transcript verbatim or is omitted -- checked against the transcript, not external canon; (4) the deliberately-ambiguous passage is explicitly flagged, not smoothed over.",
+            "Watch-out: this is being judged specifically on trustworthiness for religious content, not just summarization quality. Never let the model fabricate -- if it's not confident about a ruling or a citation, it must flag the passage rather than smooth it into something plausible-sounding. A subtly wrong ruling or a garbled citation is a worse failure than an incomplete summary."
+          ]
+        },
+        "rubric_id": "c2_acceptance_v1",
+        "rubric_text": "For each acceptance criterion, could a third party who did not build the system check it by observation or a concrete test, without needing to ask the builder for a judgment call? Pass only if at least one criterion is independently checkable this way. Reject criteria that are purely subjective ('feels fast', 'is good') with no observable proxy."
+      },
+      "request_sha256": "d4e7222174107cfe8ab43398d9d950bbd58c7401b1d091c8a7ebe0e56e02b115",
+      "response": {
+        "call_id": "ba1e0d2c4975a776",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "The first criterion's sub-checks (reported-speech attribution, verbatim citation matching, explicit flagging) remain independently checkable by inspection; that alone satisfies the rubric's 'at least one' bar. The second (folded-in) criterion restates the same testable content in narrative form rather than adding a new subjective standard.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "5e6a6d451d290364133f6e84a5b636567a999dd0c795d9753d443c7333eccb62"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "ffd7d149f15f216a",
+        "call_type": "c5_soft_context",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "Feed it a saved lecture transcript containing at least one deliberately ambiguous/garbled passage. Check, by direct inspection: (1) segment boundaries match an independently human-marked reference within [tolerance] / a reviewer agrees each segment is coherent; (2) every ruling is phrased as reported speech attributed to the speaker, never asserted as fact; (3) every citation string-matches the transcript verbatim or is omitted -- checked against the transcript, not external canon; (4) the deliberately-ambiguous passage is explicitly flagged, not smoothed over.",
+            "Watch-out: this is being judged specifically on trustworthiness for religious content, not just summarization quality. Never let the model fabricate -- if it's not confident about a ruling or a citation, it must flag the passage rather than smooth it into something plausible-sounding. A subtly wrong ruling or a garbled citation is a worse failure than an incomplete summary."
+          ],
+          "context_note": "Not a clean slate \u2014 one real soft-context item: output register has to match the seriousness of religious content. A summary can pass every hard check in condition 2 and still fail if a ruling is rendered in casual or glib phrasing \u2014 the attribution and citation being technically correct doesn't excuse a tone that trivializes it. That's the thing to capture, separate from anything condition 2 already checks.\n\nNo consent/distribution concern to add \u2014 I'm the only one consuming this, nothing gets shared, so that's out of scope, not deferred."
+        },
+        "rubric_id": "c5_soft_context_v1",
+        "rubric_text": "Given the current acceptance criteria list, does this note change how the finished build would be JUDGED (accepted/rejected) without being expressible as a testable spec requirement? If it IS expressible as one of the existing or a new acceptance criterion, it belongs there, not here -- flag as misplaced rather than failing outright."
+      },
+      "request_sha256": "884c6d4d01bf21b3df82ff8fb1e88b8e6e28a3c303482f96302c6aee925f0b16",
+      "response": {
+        "call_id": "ffd7d149f15f216a",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "Tonal/register seriousness is a genuine watch-out: it changes how the build would be judged (a summary passing every mechanical check in condition 2 could still be rejected for glib phrasing) but cannot itself be reduced to an observable test the way verbatim citation-matching or reported-speech attribution can -- it requires the kind of subjective judgment condition 2's own rubric explicitly excludes. Belongs in context.md, not the acceptance criteria.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "b85fa6193c8559be3453491ca73f021217daa189809af2fccfc13bbc7e5403f5"
+    }
+  ],
+  "max_rounds": 8,
+  "mode": "greenfield",
+  "open_questions": [],
+  "problem_statement": "A saved transcript of an Islamic lecture I couldn't attend live becomes an accurate, structured summary -- segmented, faithful to the source, with rulings and citations preserved exactly as spoken -- so I can review what was taught without having to watch the recording.",
+  "problem_statement_prefilter_flagged": false,
+  "repo_root": "C:\\Users\\hp\\loopr-proof-meeting-bot",
+  "round": 6,
+  "schema_version": 1,
+  "scope_edges": [
+    {
+      "item": "Live Zoom integration is out of scope for now -- joining meetings, audio capture, the speech-to-text API call, and auth are deferred to a later, separate build. This project takes a saved transcript file as input, not live audio. Tripwire: any dependency on Zoom's SDK, an STT provider, or a network call to join a meeting appearing in this repo means scope has crept -- that code belongs in the later integration build, not here.",
+      "kind": "out",
+      "reason": "user-stated"
+    }
+  ]
+}

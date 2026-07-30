@@ -1,0 +1,1124 @@
+{
+  "acceptance_criteria": [
+    {
+      "judge_confirmed_testable": true,
+      "text": "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+    },
+    {
+      "judge_confirmed_testable": true,
+      "text": "This phase modifies loopr's own C2 acceptance-criteria gate -- adding vagueness detection for unfalsifiable qualifiers ('correctly,' 'properly,' 'works well,' 'as expected') with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. Scope: C2 only, not C1/C3/C4/C5. No semantic/LLM-based falsifiability judgment, fixed keyword-pattern check only.\n\nReview this harder than the diff size suggests. This is loopr checking loopr -- a silent bug here doesn't just break one feature, it weakens the mechanism meant to catch bugs everywhere else, invisibly, so correct-but-fragile costs more here than elsewhere.\n\nSpecifically verify:\n1. False positives: an answer with a qualifier AND a comparison target elsewhere in the same answer (not necessarily the same sentence) -- e.g. 'this works well; specifically it matches the human-marked reference within tolerance' -- must NOT trigger the follow-up.\n2. False negatives: vague phrasing not on the fixed keyword list (e.g. 'behaves as intended') will not be caught by design (out of scope per C3) -- confirm this limitation is real and not silently different from what's documented, not that it's fixed.\n3. The new code follows the existing @dataclass convention on this touched surface -- confirm it actually conforms, don't just take it on trust.\n4. Per-list, not per-criterion: C2's existing design passes once ONE criterion clears both layers -- \"the rest can remain weaker\" (docs/stopping-test-spec.md). Confirm the new follow-up only fires when the list has zero criteria passing both layers cleanly, not merely because one weaker criterion in an otherwise-passing list looks vague. A version that nags on every vague criterion regardless of list state is a regression against the already-decided per-list pass condition, not a stricter version of it.\n\nFlag anything that fails these four checks before approving the phase."
+    }
+  ],
+  "assumptions": [],
+  "boundary": {
+    "confirmed": true,
+    "confirmed_hash": "4a0035716543046aad632b3e865c61f4e5ead1849e7c32355a151a338287c8b8",
+    "declined": false,
+    "text": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope."
+  },
+  "brownfield": {
+    "classifications": [
+      {
+        "pattern_id": "decorator:dataclass",
+        "reason": "Core, recently touched, no deprecation markers, and does not conflict with the stated intent -- the new vagueness-check code will itself want a plain dataclass result type (matching StructuralResult's own shape), so following this convention is correct, not cruft. The single-author signal is expected for a young, single-author project and isn't itself a negative signal here. occurrence_count is at the minimum threshold (weak on its own per the qualifier), but centrality=core and the absence of any conflicting signal make CONFORM the right call, not AMBIGUOUS.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "decorator:model_validator",
+        "reason": "model_validator backs loopr's own load-bearing invariants (two-layer check_two_layer_invariant, check_mode_coherent, check_confirmation_coherent, check_resolution_coherent) -- this is deliberate architecture, not an incidental pattern. Peripheral centrality here just reflects that this specific change doesn't need a new validator, not that the convention itself is marginal. No conflict with the stated intent: nothing about the new vagueness check requires bypassing or duplicating this pattern.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:__future__",
+        "reason": "A universal, module-wide boilerplate convention (postponed annotation evaluation) applied consistently across every file in the touched surface, including tests. No deprecation, core centrality, no conflict with the stated intent -- new modules in this change should carry it too.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:dataclasses",
+        "reason": "Standard-library import used consistently wherever dataclasses appear in this codebase's own convention (paired with the @dataclass decorator pattern already classified CONFORM). Core, recent, no deprecation, no conflict with the stated intent.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.judge.envelope",
+        "reason": "Core internal module import (digest/call_id helpers) used consistently by both the structural checks and their tests. No conflict with the stated intent; new code touching this surface should use the same shared utility rather than reimplementing it.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.models.common",
+        "reason": "Shared enums/base-model import used across nearly every module and test in the touched surface. Core, recent, no conflict -- new code will need these enums too.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.models.interrogation",
+        "reason": "Import of the interrogation-state models the new structural check will read acceptance_criteria from directly. Core, recent, no conflict.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.models.judge",
+        "reason": "Import of JudgeRequest/JudgeResponse, needed by anything constructing or handling a judge call. Core, recent, no conflict -- the new C2 keyword check itself doesn't need this directly, but conditions.py's own orchestration does.",
+        "verdict": "conform"
+      }
+    ],
+    "gate_3_confirmed": false,
+    "pattern_candidates": [
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "decorator 'dataclass' recurring across the touched surface",
+        "git_last_touched_days_ago": 1,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/checks/conditions.py:45",
+          "src/loopr/checks/structural.py:36",
+          "src/loopr/rubrics/texts.py:16"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 3,
+        "pattern_id": "decorator:dataclass",
+        "signal_qualifiers": [
+          "at the minimum recurrence threshold; weak evidence of intentionality"
+        ]
+      },
+      {
+        "centrality": "peripheral",
+        "deprecation_markers": [],
+        "description": "decorator 'model_validator' recurring across the touched surface",
+        "git_last_touched_days_ago": 1,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/models/interrogation.py:116",
+          "src/loopr/models/interrogation.py:37",
+          "src/loopr/models/interrogation.py:60",
+          "src/loopr/models/interrogation.py:82"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 4,
+        "pattern_id": "decorator:model_validator",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import '__future__' recurring across the touched surface",
+        "git_last_touched_days_ago": 1,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/checks/conditions.py:9",
+          "src/loopr/checks/structural.py:9",
+          "src/loopr/interrogation/questions.py:7",
+          "src/loopr/models/interrogation.py:3",
+          "src/loopr/rubrics/texts.py:8",
+          "tests/test_conditions.py:3",
+          "tests/test_structural_checks.py:3"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 7,
+        "pattern_id": "import:__future__",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'dataclasses' recurring across the touched surface",
+        "git_last_touched_days_ago": 1,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/checks/conditions.py:11",
+          "src/loopr/checks/structural.py:12",
+          "src/loopr/rubrics/texts.py:11"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 3,
+        "pattern_id": "import:dataclasses",
+        "signal_qualifiers": [
+          "at the minimum recurrence threshold; weak evidence of intentionality"
+        ]
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.judge.envelope' recurring across the touched surface",
+        "git_last_touched_days_ago": 1,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/checks/conditions.py:21",
+          "src/loopr/checks/structural.py:14",
+          "tests/test_conditions.py:86",
+          "tests/test_structural_checks.py:80",
+          "tests/test_structural_checks.py:88"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 5,
+        "pattern_id": "import:loopr.judge.envelope",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.models.common' recurring across the touched surface",
+        "git_last_touched_days_ago": 1,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/checks/conditions.py:22",
+          "src/loopr/checks/structural.py:15",
+          "src/loopr/interrogation/questions.py:9",
+          "src/loopr/models/interrogation.py:7",
+          "src/loopr/rubrics/texts.py:13",
+          "tests/test_conditions.py:9",
+          "tests/test_structural_checks.py:13"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 7,
+        "pattern_id": "import:loopr.models.common",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.models.interrogation' recurring across the touched surface",
+        "git_last_touched_days_ago": 1,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/checks/conditions.py:23",
+          "src/loopr/checks/structural.py:16",
+          "src/loopr/interrogation/questions.py:10",
+          "tests/test_conditions.py:10",
+          "tests/test_structural_checks.py:14"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 5,
+        "pattern_id": "import:loopr.models.interrogation",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.models.judge' recurring across the touched surface",
+        "git_last_touched_days_ago": 1,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/checks/conditions.py:24",
+          "src/loopr/models/interrogation.py:125",
+          "tests/test_conditions.py:11",
+          "tests/test_conditions.py:87"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 4,
+        "pattern_id": "import:loopr.models.judge",
+        "signal_qualifiers": []
+      }
+    ],
+    "touched_surface": [
+      "src/loopr/checks/structural.py",
+      "src/loopr/checks/conditions.py",
+      "src/loopr/interrogation/questions.py",
+      "src/loopr/rubrics/texts.py",
+      "src/loopr/models/interrogation.py",
+      "tests/test_structural_checks.py",
+      "tests/test_conditions.py",
+      "docs/stopping-test-spec.md"
+    ],
+    "touched_surface_confirmed_hash": null
+  },
+  "condition_results": [
+    {
+      "condition": "c1_outcome",
+      "detail": "judge verdict reused: States a concrete outcome (never advancing past the point of typing an acceptance criterion that later proves unfalsifiable) and a clear beneficiary (a solo builder with no second reviewer). Naming condition 2 as the moment of detection is not prescribing a solution -- it's stating when the outcome must hold, which is fine.",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c2_acceptance",
+      "detail": "judge verdict reused: The first criterion's labeled-batch test remains independently checkable, no builder judgment required -- satisfies the 'at least one' bar regardless of the second criterion's density.",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c3_scope_edges",
+      "detail": "judge verdict reused: Names three concrete boundary objects (only C2 is checked, not C1/C3/C4/C5; flag-and-ask rather than auto-rewrite; a fixed keyword pattern rather than full semantic falsifiability judgment) -- a builder reading this later would know unambiguously whether a new request (e.g. 'also check C5 for vagueness') falls inside or outside it.",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c4_boundary",
+      "detail": "boundary confirmed and hash matches current text",
+      "judge_pass": null,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c5_soft_context",
+      "detail": "at least one note judge-confirmed as genuine soft context",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c6_no_unknowns",
+      "detail": "structural pass and all items already judge-confirmed",
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    }
+  ],
+  "consecutive_judge_failures": {
+    "c1_outcome": 0
+  },
+  "context_notes": [
+    {
+      "source": "stated",
+      "text": "This phase modifies loopr's own C2 acceptance-criteria gate -- adding vagueness detection for unfalsifiable qualifiers ('correctly,' 'properly,' 'works well,' 'as expected') with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. Scope: C2 only, not C1/C3/C4/C5. No semantic/LLM-based falsifiability judgment, fixed keyword-pattern check only.\n\nReview this harder than the diff size suggests. This is loopr checking loopr -- a silent bug here doesn't just break one feature, it weakens the mechanism meant to catch bugs everywhere else, invisibly, so correct-but-fragile costs more here than elsewhere.\n\nSpecifically verify:\n1. False positives: an answer with a qualifier AND a comparison target elsewhere in the same answer (not necessarily the same sentence) -- e.g. 'this works well; specifically it matches the human-marked reference within tolerance' -- must NOT trigger the follow-up.\n2. False negatives: vague phrasing not on the fixed keyword list (e.g. 'behaves as intended') will not be caught by design (out of scope per C3) -- confirm this limitation is real and not silently different from what's documented, not that it's fixed.\n3. The new code follows the existing @dataclass convention on this touched surface -- confirm it actually conforms, don't just take it on trust.\n4. Per-list, not per-criterion: C2's existing design passes once ONE criterion clears both layers -- \"the rest can remain weaker\" (docs/stopping-test-spec.md). Confirm the new follow-up only fires when the list has zero criteria passing both layers cleanly, not merely because one weaker criterion in an otherwise-passing list looks vague. A version that nags on every vague criterion regardless of list state is a regression against the already-decided per-list pass condition, not a stricter version of it.\n\nFlag anything that fails these four checks before approving the phase."
+    },
+    {
+      "source": "stated",
+      "text": "Not a clean slate. This is personal use only -- not for MSA, not shared, no audience beyond me, so drop any framing tied to leadership position or public stakes.\n\nOne real soft-context item, unchanged from before: output register has to match the seriousness of religious content. A summary can pass every hard check in the correctness boundary -- segmented correctly, ruling attributed as reported speech, citation verbatim, ambiguity flagged -- and still fail if a hukm is rendered in phrasing that trivializes it. That's true even for an audience of one; it's about the summary being a faithful record of something I'm treating as religiously serious, not about who else reads it."
+    },
+    {
+      "source": "stated",
+      "text": "Not a clean slate. This is personal use only -- not for MSA, not shared, no audience beyond me, so drop any framing tied to leadership position or public stakes.\n\nOne real soft-context item, unchanged from before: output register has to match the seriousness of religious content. A summary can pass every hard check in the correctness boundary -- segmented correctly, ruling attributed as reported speech, citation verbatim, ambiguity flagged -- and still fail if a hukm is rendered in phrasing that trivializes it. That's true even for an audience of one; it's about the summary being a faithful record of something I'm treating as religiously serious, not about who else reads it."
+    },
+    {
+      "source": "stated",
+      "text": "Confirmed: the core boundary excludes speech-to-text. loopr's target is transcript-in -> structured-summary-out only, fed by a saved transcript file. STT and Zoom integration (bot admission, audio capture, the STT API call, auth) are outside loopr's scope entirely -- normal plumbing, built separately, bolted on after the core is proven. Do not fold STT into the core or into loopr's proving run. Proceed on that basis -- this is confirmed, not open."
+    },
+    {
+      "source": "stated",
+      "text": "This specific change gets reviewed harder than its diff size suggests: a silent bug in loopr's own C2 gate wouldn't just break this one feature, it would degrade every future interrogation loopr runs afterward, invisibly. That's the standard this diff should be judged against."
+    }
+  ],
+  "gates": {
+    "gate_1_baby_prd": {
+      "confirmed": true,
+      "confirmed_payload_digest": "b1c530dd22e6ddeb6a1149efad51cf3224bb97891032e3c5c05d3c9e21615374",
+      "gate": "gate_1_baby_prd",
+      "payload_digest": "b1c530dd22e6ddeb6a1149efad51cf3224bb97891032e3c5c05d3c9e21615374",
+      "requested_round": 11,
+      "user_amendment": null
+    },
+    "gate_2_boundary": {
+      "confirmed": true,
+      "confirmed_payload_digest": "9bfaafc2829137ee665640265b9e257033a706d2f2c7cc6352e1509c2084d244",
+      "gate": "gate_2_boundary",
+      "payload_digest": "9bfaafc2829137ee665640265b9e257033a706d2f2c7cc6352e1509c2084d244",
+      "requested_round": 5,
+      "user_amendment": null
+    }
+  },
+  "judge_log": [
+    {
+      "answered_at_round": 2,
+      "request": {
+        "call_id": "fd337b8c2c42693d",
+        "call_type": "c1_outcome",
+        "created_round": 2,
+        "envelope_version": 1,
+        "inputs": {
+          "prefilter_flagged": false,
+          "problem_statement": "loopr's own C2 gate stops accepting vague-pass-criteria language silently."
+        },
+        "rubric_id": "c1_outcome_v1",
+        "rubric_text": "Does this statement describe a desired real-world outcome/result (what becomes true when this is done, for whom), or does it prescribe a specific solution/implementation as the primary subject? Pass only if a concrete outcome is named. A stated solution is acceptable ONLY if it is explicitly subordinate to a stated outcome (e.g. 'I want X to happen; my current guess at how is Y' passes -- 'Y' alone does not)."
+      },
+      "request_sha256": "a231b5741885605d444a587dc55b7057119f3a8987badec8b5b6ae44509b7dcd",
+      "response": {
+        "call_id": "fd337b8c2c42693d",
+        "misplaced": false,
+        "missing": null,
+        "passed": false,
+        "reason": "Names a specific mechanism ('the C2 gate') and its behavior change ('stops accepting X silently') as the primary subject, with no outcome stated at all -- not even a solution subordinated to a named result. Fails the rubric: what real-world outcome does a tighter C2 gate actually produce, and for whom?",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "3eb0dd13ba7171bf407453da44c24c73d147b4021fb0b10afc8db45d9b97ce33"
+    },
+    {
+      "answered_at_round": 3,
+      "request": {
+        "call_id": "fecfbc72904efd02",
+        "call_type": "c1_outcome",
+        "created_round": 3,
+        "envelope_version": 1,
+        "inputs": {
+          "prefilter_flagged": false,
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production."
+        },
+        "rubric_id": "c1_outcome_v1",
+        "rubric_text": "Does this statement describe a desired real-world outcome/result (what becomes true when this is done, for whom), or does it prescribe a specific solution/implementation as the primary subject? Pass only if a concrete outcome is named. A stated solution is acceptable ONLY if it is explicitly subordinate to a stated outcome (e.g. 'I want X to happen; my current guess at how is Y' passes -- 'Y' alone does not)."
+      },
+      "request_sha256": "586aec97d67d7ba793fc4152ae9c1d97e3aac06de68d3decd52612ee370499ff",
+      "response": {
+        "call_id": "fecfbc72904efd02",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "States a concrete outcome (never advancing past the point of typing an acceptance criterion that later proves unfalsifiable) and a clear beneficiary (a solo builder with no second reviewer). Naming condition 2 as the moment of detection is not prescribing a solution -- it's stating when the outcome must hold, which is fine.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "18830c5b319fc57df613a59a3666515a52c4b7614e5f6ebd87c85db6c38a05f4"
+    },
+    {
+      "answered_at_round": 4,
+      "request": {
+        "call_id": "a3420be7bba22a96",
+        "call_type": "c2_acceptance",
+        "created_round": 4,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ]
+        },
+        "rubric_id": "c2_acceptance_v1",
+        "rubric_text": "For each acceptance criterion, could a third party who did not build the system check it by observation or a concrete test, without needing to ask the builder for a judgment call? Pass only if at least one criterion is independently checkable this way. Reject criteria that are purely subjective ('feels fast', 'is good') with no observable proxy."
+      },
+      "request_sha256": "b996030559bbed00159f92494e2dfc057857bc276bad367c96f69be32148a5c5",
+      "response": {
+        "call_id": "a3420be7bba22a96",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "Describes a concrete, constructible test batch with a binary, observable outcome (accept-only-with-concrete-target, follow-up-on-bare-quality-words), checkable by a third party without asking the builder for a judgment call.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "33b6531825b3009984cb540f5342752f8f98961a27244686f5d528fb18605c76"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "0c9e94ce8eaf49ac",
+        "call_type": "c3_scope_edges",
+        "created_round": 5,
+        "envelope_version": 1,
+        "inputs": {
+          "scope_edges": [
+            {
+              "item": "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred.",
+              "kind": "out",
+              "reason": "user-stated"
+            }
+          ]
+        },
+        "rubric_id": "c3_scope_edges_v1",
+        "rubric_text": "Is each named edge specific enough that a builder reading it later would know unambiguously whether a new request falls inside or outside it? Reject vague edges ('nothing fancy', 'basic stuff only') that don't name a concrete boundary object (a feature, an integration, a scale threshold, a user segment)."
+      },
+      "request_sha256": "9e3e8f732245eefe2ad25e89e03287600c9a6a171edfd7843346e1ecbf7611d9",
+      "response": {
+        "call_id": "0c9e94ce8eaf49ac",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "Names three concrete boundary objects (only C2 is checked, not C1/C3/C4/C5; flag-and-ask rather than auto-rewrite; a fixed keyword pattern rather than full semantic falsifiability judgment) -- a builder reading this later would know unambiguously whether a new request (e.g. 'also check C5 for vagueness') falls inside or outside it.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "983f4364302be63312b66cff22b9ddb70476ab9b84cccdc5864eb80923867c13"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "741ebedfc7134f74",
+        "call_type": "bf_relevance",
+        "created_round": 5,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "candidate_files": [
+            ".coverage",
+            ".env",
+            ".env.example",
+            ".gitignore",
+            "Dockerfile",
+            "PHASE_1_SPEC.md",
+            "README.md",
+            "docker-compose.yml",
+            "docs/conformance-classification-spec.md",
+            "docs/modernization_log.md",
+            "docs/stopping-test-spec.md",
+            "entrypoint.sh",
+            "kaide-loop.sh",
+            "loop.gates.sh",
+            "loopr-MIGRATION.md",
+            "loopr-PRD.md",
+            "prompts/loopr/step10_prd_modernization.md",
+            "prompts/loopr/step11_build.md",
+            "prompts/loopr/step12_review.md",
+            "prompts/step11_build.template.md",
+            "prompts/step12_5_audit.template.md",
+            "prompts/step12_review.audit-tail.template.md",
+            "prompts/step12_review.template.md",
+            "proofs/greenfield/FINDINGS.md",
+            "proofs/greenfield/baby_prd.md",
+            "proofs/greenfield/context.md",
+            "proofs/greenfield/final_state.json",
+            "proofs/greenfield/judge_exchange_log.md",
+            "pyproject.toml",
+            "run.log",
+            "scripts/preflight.sh",
+            "src/loopr/__init__.py",
+            "src/loopr/artifacts/__init__.py",
+            "src/loopr/artifacts/baby_prd.py",
+            "src/loopr/artifacts/conformance_ledger.py",
+            "src/loopr/artifacts/context_md.py",
+            "src/loopr/brownfield/__init__.py",
+            "src/loopr/brownfield/classify.py",
+            "src/loopr/brownfield/discovery.py",
+            "src/loopr/brownfield/evidence.py",
+            "src/loopr/checks/__init__.py",
+            "src/loopr/checks/conditions.py",
+            "src/loopr/checks/structural.py",
+            "src/loopr/cli.py",
+            "src/loopr/errors.py",
+            "src/loopr/exit_codes.py",
+            "src/loopr/gates/__init__.py",
+            "src/loopr/gates/gates.py",
+            "src/loopr/interrogation/__init__.py",
+            "src/loopr/interrogation/loop.py",
+            "src/loopr/interrogation/questions.py",
+            "src/loopr/judge/__init__.py",
+            "src/loopr/judge/agent_client.py",
+            "src/loopr/judge/envelope.py",
+            "src/loopr/judge/port.py",
+            "src/loopr/judge/scripted_client.py",
+            "src/loopr/models/__init__.py",
+            "src/loopr/models/brownfield.py",
+            "src/loopr/models/common.py",
+            "src/loopr/models/gates.py",
+            "src/loopr/models/interrogation.py",
+            "src/loopr/models/judge.py",
+            "src/loopr/py.typed",
+            "src/loopr/rubrics/__init__.py",
+            "src/loopr/rubrics/texts.py",
+            "src/loopr/state/__init__.py",
+            "src/loopr/state/store.py",
+            "supervised_run_stdout.log",
+            "tests/conftest.py",
+            "tests/test_artifacts.py",
+            "tests/test_brownfield_classify.py",
+            "tests/test_brownfield_discovery.py",
+            "tests/test_brownfield_evidence.py",
+            "tests/test_c5_misplaced_routing.py",
+            "tests/test_cli.py",
+            "tests/test_conditions.py",
+            "tests/test_gates.py",
+            "tests/test_judge_envelope.py",
+            "tests/test_judge_scope.py",
+            "tests/test_no_hardcoded_domain.py",
+            "tests/test_no_paid_dependency.py",
+            "tests/test_round_cap.py",
+            "tests/test_state_store.py",
+            "tests/test_structural_checks.py"
+          ],
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_relevance_v1",
+        "rubric_text": "Given the confirmed problem statement, acceptance criteria, and scope edges, which of these candidate files are actually relevant to the work -- i.e. the new work will read, modify, or must interact with them? Select only genuinely relevant files; do not pad the selection for safety."
+      },
+      "request_sha256": "2d23745e21d7f9df4adfe9461bc2c945379e4b7c954bfadab44532b6bb69330a",
+      "response": {
+        "call_id": "741ebedfc7134f74",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "The change is entirely inside C2's structural pre-check and its rubric/follow-up wiring: structural.py owns check_c2_acceptance itself; conditions.py orchestrates when the judge is invoked and could opportunistically pre-filter with the new keyword check; questions.py builds the C2 follow-up text, which should reference the specific vague qualifier caught; rubrics/texts.py may need the C2 rubric to name the new structural gate explicitly; interrogation.py's AcceptanceCriterion model is the read/write surface for criterion text. docs/stopping-test-spec.md is C2's source spec and should be consulted, since it's the document structural.py's heuristic is required to match. Everything else (Docker/CLI/brownfield/gates/judge-envelope/other conditions' tests) is untouched by this change and would be padding to include.",
+        "selected_files": [
+          "src/loopr/checks/structural.py",
+          "src/loopr/checks/conditions.py",
+          "src/loopr/interrogation/questions.py",
+          "src/loopr/rubrics/texts.py",
+          "src/loopr/models/interrogation.py",
+          "tests/test_structural_checks.py",
+          "tests/test_conditions.py",
+          "docs/stopping-test-spec.md"
+        ],
+        "verdict": null
+      },
+      "response_sha256": "8ba2e55345b16e0c10787a87c6fbb9dd579c5c221296433b734847f97b063834"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "b9669e7cccb0b3f6",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "boundary": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "decorator 'dataclass' recurring across the touched surface",
+            "git_last_touched_days_ago": 1,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/checks/conditions.py:45",
+              "src/loopr/checks/structural.py:36",
+              "src/loopr/rubrics/texts.py:16"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 3,
+            "pattern_id": "decorator:dataclass",
+            "signal_qualifiers": [
+              "at the minimum recurrence threshold; weak evidence of intentionality"
+            ]
+          },
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "1577cab9d1d3f8645bc93d6a04b3ce2c8fef91b8e413107fdc93b440c0822e06",
+      "response": {
+        "call_id": "b9669e7cccb0b3f6",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Core, recently touched, no deprecation markers, and does not conflict with the stated intent -- the new vagueness-check code will itself want a plain dataclass result type (matching StructuralResult's own shape), so following this convention is correct, not cruft. The single-author signal is expected for a young, single-author project and isn't itself a negative signal here. occurrence_count is at the minimum threshold (weak on its own per the qualifier), but centrality=core and the absence of any conflicting signal make CONFORM the right call, not AMBIGUOUS.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "d3c387429cb256cdbfafb4e61cfd6d31f8a0da6942f095bcfc9cdff709c54ddb"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "2acb47cf2b6af3f3",
+        "call_type": "bf_classify",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "boundary": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope.",
+          "evidence_bundle": {
+            "centrality": "peripheral",
+            "deprecation_markers": [],
+            "description": "decorator 'model_validator' recurring across the touched surface",
+            "git_last_touched_days_ago": 1,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/models/interrogation.py:116",
+              "src/loopr/models/interrogation.py:37",
+              "src/loopr/models/interrogation.py:60",
+              "src/loopr/models/interrogation.py:82"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 4,
+            "pattern_id": "decorator:model_validator",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "50a7c43241ead37814fce98574525a82d88a4f4fc799379cd6ee43a7dcc3f686",
+      "response": {
+        "call_id": "2acb47cf2b6af3f3",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "model_validator backs loopr's own load-bearing invariants (two-layer check_two_layer_invariant, check_mode_coherent, check_confirmation_coherent, check_resolution_coherent) -- this is deliberate architecture, not an incidental pattern. Peripheral centrality here just reflects that this specific change doesn't need a new validator, not that the convention itself is marginal. No conflict with the stated intent: nothing about the new vagueness check requires bypassing or duplicating this pattern.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "340d4e9d7b054e9bb43c43d1e229815b6352d678df8b92e1e9ed408119ab0569"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "27d694b015736e3f",
+        "call_type": "bf_classify",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "boundary": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import '__future__' recurring across the touched surface",
+            "git_last_touched_days_ago": 1,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/checks/conditions.py:9",
+              "src/loopr/checks/structural.py:9",
+              "src/loopr/interrogation/questions.py:7",
+              "src/loopr/models/interrogation.py:3",
+              "src/loopr/rubrics/texts.py:8",
+              "tests/test_conditions.py:3",
+              "tests/test_structural_checks.py:3"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 7,
+            "pattern_id": "import:__future__",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "b15ef87bdf98cac2189e5917986da0707172fc3f4c91b7497ad7bbeaab4ceb85",
+      "response": {
+        "call_id": "27d694b015736e3f",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "A universal, module-wide boilerplate convention (postponed annotation evaluation) applied consistently across every file in the touched surface, including tests. No deprecation, core centrality, no conflict with the stated intent -- new modules in this change should carry it too.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "f3af2809e567133ebf03ab64d082c6f12425125b06ebd999c16431437bc1d66a"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "382e66b6b643ded2",
+        "call_type": "bf_classify",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "boundary": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'dataclasses' recurring across the touched surface",
+            "git_last_touched_days_ago": 1,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/checks/conditions.py:11",
+              "src/loopr/checks/structural.py:12",
+              "src/loopr/rubrics/texts.py:11"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 3,
+            "pattern_id": "import:dataclasses",
+            "signal_qualifiers": [
+              "at the minimum recurrence threshold; weak evidence of intentionality"
+            ]
+          },
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "a45926c5ab84b3d701be863f522f1237c227da79eadf97b01f42cb23ddf41dfb",
+      "response": {
+        "call_id": "382e66b6b643ded2",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard-library import used consistently wherever dataclasses appear in this codebase's own convention (paired with the @dataclass decorator pattern already classified CONFORM). Core, recent, no deprecation, no conflict with the stated intent.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "8fb95a3ac02982c3ae38cbc2e3b0f249bdd9d24acec57636e2279590a2a5e43b"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "83277f73456b6614",
+        "call_type": "bf_classify",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "boundary": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.judge.envelope' recurring across the touched surface",
+            "git_last_touched_days_ago": 1,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/checks/conditions.py:21",
+              "src/loopr/checks/structural.py:14",
+              "tests/test_conditions.py:86",
+              "tests/test_structural_checks.py:80",
+              "tests/test_structural_checks.py:88"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 5,
+            "pattern_id": "import:loopr.judge.envelope",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "863983427aaabdc404aa486d7030e2a83ff223a15baf6da996057628fd15252e",
+      "response": {
+        "call_id": "83277f73456b6614",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Core internal module import (digest/call_id helpers) used consistently by both the structural checks and their tests. No conflict with the stated intent; new code touching this surface should use the same shared utility rather than reimplementing it.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "83f2527de09f592277a726ac4f7e99b6bc6d04fc7749a73e5deb17c796b2d8a5"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "72c0a5c839f8ee0a",
+        "call_type": "bf_classify",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "boundary": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.models.common' recurring across the touched surface",
+            "git_last_touched_days_ago": 1,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/checks/conditions.py:22",
+              "src/loopr/checks/structural.py:15",
+              "src/loopr/interrogation/questions.py:9",
+              "src/loopr/models/interrogation.py:7",
+              "src/loopr/rubrics/texts.py:13",
+              "tests/test_conditions.py:9",
+              "tests/test_structural_checks.py:13"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 7,
+            "pattern_id": "import:loopr.models.common",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "99c1669d7dac289e0c86fc6764921379e1ace5126d4abc6af6be817b36219c46",
+      "response": {
+        "call_id": "72c0a5c839f8ee0a",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Shared enums/base-model import used across nearly every module and test in the touched surface. Core, recent, no conflict -- new code will need these enums too.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "a7c289bae51e8d929b29215a379d488c2e809e3b5f9559e0922e21b78233c42e"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "2387547d40c1633c",
+        "call_type": "bf_classify",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "boundary": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.models.interrogation' recurring across the touched surface",
+            "git_last_touched_days_ago": 1,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/checks/conditions.py:23",
+              "src/loopr/checks/structural.py:16",
+              "src/loopr/interrogation/questions.py:10",
+              "tests/test_conditions.py:10",
+              "tests/test_structural_checks.py:14"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 5,
+            "pattern_id": "import:loopr.models.interrogation",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "b2ed9ee8fda99571de539a56515dbd3827b07cf7ca8efb596ef3d5ece4ed06b9",
+      "response": {
+        "call_id": "2387547d40c1633c",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Import of the interrogation-state models the new structural check will read acceptance_criteria from directly. Core, recent, no conflict.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "73b6c6a24fd5e1d72b11f9b1382c5b375510e5778bb6ea270d31660586c657bf"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "6b70b862fc283284",
+        "call_type": "bf_classify",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "boundary": "This change adds vagueness-detection to loopr's own C2 acceptance-criteria gate only -- a fixed keyword-pattern check for unfalsifiable qualifiers (\"correctly,\" \"properly,\" \"works well,\" \"as expected\") with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. C1, C3, C4, and C5 are not touched. No semantic/LLM-based falsifiability judgment beyond the fixed pattern is in scope.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.models.judge' recurring across the touched surface",
+            "git_last_touched_days_ago": 1,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/checks/conditions.py:24",
+              "src/loopr/models/interrogation.py:125",
+              "tests/test_conditions.py:11",
+              "tests/test_conditions.py:87"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 4,
+            "pattern_id": "import:loopr.models.judge",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+          "scope_edges": [
+            "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "2b32a727d056fb05fe3edeaecf0caf14a920d7b8c0c9c700f91420e2da1e5765",
+      "response": {
+        "call_id": "6b70b862fc283284",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Import of JudgeRequest/JudgeResponse, needed by anything constructing or handling a judge call. Core, recent, no conflict -- the new C2 keyword check itself doesn't need this directly, but conditions.py's own orchestration does.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "593a9f60bc6b4f49b690081dc28fdfbcb0782293871532c8fcf585a41f1c9971"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "e957986701610739",
+        "call_type": "c5_soft_context",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation."
+          ],
+          "context_note": "This phase modifies loopr's own C2 acceptance-criteria gate -- adding vagueness detection for unfalsifiable qualifiers ('correctly,' 'properly,' 'works well,' 'as expected') with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. Scope: C2 only, not C1/C3/C4/C5. No semantic/LLM-based falsifiability judgment, fixed keyword-pattern check only.\n\nReview this harder than the diff size suggests. This is loopr checking loopr -- a silent bug here doesn't just break one feature, it weakens the mechanism meant to catch bugs everywhere else, invisibly, so correct-but-fragile costs more here than elsewhere.\n\nSpecifically verify:\n1. False positives: an answer with a qualifier AND a comparison target elsewhere in the same answer (not necessarily the same sentence) -- e.g. 'this works well; specifically it matches the human-marked reference within tolerance' -- must NOT trigger the follow-up.\n2. False negatives: vague phrasing not on the fixed keyword list (e.g. 'behaves as intended') will not be caught by design (out of scope per C3) -- confirm this limitation is real and not silently different from what's documented, not that it's fixed.\n3. The new code follows the existing @dataclass convention on this touched surface -- confirm it actually conforms, don't just take it on trust.\n4. Per-list, not per-criterion: C2's existing design passes once ONE criterion clears both layers -- \"the rest can remain weaker\" (docs/stopping-test-spec.md). Confirm the new follow-up only fires when the list has zero criteria passing both layers cleanly, not merely because one weaker criterion in an otherwise-passing list looks vague. A version that nags on every vague criterion regardless of list state is a regression against the already-decided per-list pass condition, not a stricter version of it.\n\nFlag anything that fails these four checks before approving the phase."
+        },
+        "rubric_id": "c5_soft_context_v1",
+        "rubric_text": "Given the current acceptance criteria list, does this note change how the finished build would be JUDGED (accepted/rejected) without being expressible as a testable spec requirement? If it IS expressible as one of the existing or a new acceptance criterion, it belongs there, not here -- flag as misplaced rather than failing outright."
+      },
+      "request_sha256": "4114ce53046d56ff37cc88b3c1469d0f261d57c06171e9b9db02a3bc3b7ffd95",
+      "response": {
+        "call_id": "e957986701610739",
+        "misplaced": true,
+        "missing": null,
+        "passed": false,
+        "reason": "All four numbered items are concrete, testable claims (a specific false-positive input/expected-behavior pair, a specific false-negative input/expected-behavior pair, a convention-conformance check, and a specific regression condition on per-list pass semantics) -- this reads as a test plan, not a boss-said/political/watch-out note. Expressible as acceptance criteria, so misplaced rather than genuine soft context.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "87ea160b3730a9f4b20d3b89935fccc0ad3b2041734d5bd75392667367c8887c"
+    },
+    {
+      "answered_at_round": 6,
+      "request": {
+        "call_id": "27cc0e490ddfbcd4",
+        "call_type": "c2_acceptance",
+        "created_round": 6,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation.",
+            "This phase modifies loopr's own C2 acceptance-criteria gate -- adding vagueness detection for unfalsifiable qualifiers ('correctly,' 'properly,' 'works well,' 'as expected') with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. Scope: C2 only, not C1/C3/C4/C5. No semantic/LLM-based falsifiability judgment, fixed keyword-pattern check only.\n\nReview this harder than the diff size suggests. This is loopr checking loopr -- a silent bug here doesn't just break one feature, it weakens the mechanism meant to catch bugs everywhere else, invisibly, so correct-but-fragile costs more here than elsewhere.\n\nSpecifically verify:\n1. False positives: an answer with a qualifier AND a comparison target elsewhere in the same answer (not necessarily the same sentence) -- e.g. 'this works well; specifically it matches the human-marked reference within tolerance' -- must NOT trigger the follow-up.\n2. False negatives: vague phrasing not on the fixed keyword list (e.g. 'behaves as intended') will not be caught by design (out of scope per C3) -- confirm this limitation is real and not silently different from what's documented, not that it's fixed.\n3. The new code follows the existing @dataclass convention on this touched surface -- confirm it actually conforms, don't just take it on trust.\n4. Per-list, not per-criterion: C2's existing design passes once ONE criterion clears both layers -- \"the rest can remain weaker\" (docs/stopping-test-spec.md). Confirm the new follow-up only fires when the list has zero criteria passing both layers cleanly, not merely because one weaker criterion in an otherwise-passing list looks vague. A version that nags on every vague criterion regardless of list state is a regression against the already-decided per-list pass condition, not a stricter version of it.\n\nFlag anything that fails these four checks before approving the phase."
+          ]
+        },
+        "rubric_id": "c2_acceptance_v1",
+        "rubric_text": "For each acceptance criterion, could a third party who did not build the system check it by observation or a concrete test, without needing to ask the builder for a judgment call? Pass only if at least one criterion is independently checkable this way. Reject criteria that are purely subjective ('feels fast', 'is good') with no observable proxy."
+      },
+      "request_sha256": "459b25e1164b974cb5ab94d121a3d19040bd95c4670bb0d0042a6a135a7a2425",
+      "response": {
+        "call_id": "27cc0e490ddfbcd4",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "The first criterion's labeled-batch test remains independently checkable, no builder judgment required -- satisfies the 'at least one' bar regardless of the second criterion's density.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "4b4349c21376bc3ef07ef83a32b2193dd763680d16d207e0c9034f7cddaf1127"
+    },
+    {
+      "answered_at_round": 8,
+      "request": {
+        "call_id": "e52344be508a2bdc",
+        "call_type": "c5_soft_context",
+        "created_round": 8,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation.",
+            "This phase modifies loopr's own C2 acceptance-criteria gate -- adding vagueness detection for unfalsifiable qualifiers ('correctly,' 'properly,' 'works well,' 'as expected') with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. Scope: C2 only, not C1/C3/C4/C5. No semantic/LLM-based falsifiability judgment, fixed keyword-pattern check only.\n\nReview this harder than the diff size suggests. This is loopr checking loopr -- a silent bug here doesn't just break one feature, it weakens the mechanism meant to catch bugs everywhere else, invisibly, so correct-but-fragile costs more here than elsewhere.\n\nSpecifically verify:\n1. False positives: an answer with a qualifier AND a comparison target elsewhere in the same answer (not necessarily the same sentence) -- e.g. 'this works well; specifically it matches the human-marked reference within tolerance' -- must NOT trigger the follow-up.\n2. False negatives: vague phrasing not on the fixed keyword list (e.g. 'behaves as intended') will not be caught by design (out of scope per C3) -- confirm this limitation is real and not silently different from what's documented, not that it's fixed.\n3. The new code follows the existing @dataclass convention on this touched surface -- confirm it actually conforms, don't just take it on trust.\n4. Per-list, not per-criterion: C2's existing design passes once ONE criterion clears both layers -- \"the rest can remain weaker\" (docs/stopping-test-spec.md). Confirm the new follow-up only fires when the list has zero criteria passing both layers cleanly, not merely because one weaker criterion in an otherwise-passing list looks vague. A version that nags on every vague criterion regardless of list state is a regression against the already-decided per-list pass condition, not a stricter version of it.\n\nFlag anything that fails these four checks before approving the phase."
+          ],
+          "context_note": "Not a clean slate. This is personal use only -- not for MSA, not shared, no audience beyond me, so drop any framing tied to leadership position or public stakes.\n\nOne real soft-context item, unchanged from before: output register has to match the seriousness of religious content. A summary can pass every hard check in the correctness boundary -- segmented correctly, ruling attributed as reported speech, citation verbatim, ambiguity flagged -- and still fail if a hukm is rendered in phrasing that trivializes it. That's true even for an audience of one; it's about the summary being a faithful record of something I'm treating as religiously serious, not about who else reads it."
+        },
+        "rubric_id": "c5_soft_context_v1",
+        "rubric_text": "Given the current acceptance criteria list, does this note change how the finished build would be JUDGED (accepted/rejected) without being expressible as a testable spec requirement? If it IS expressible as one of the existing or a new acceptance criterion, it belongs there, not here -- flag as misplaced rather than failing outright."
+      },
+      "request_sha256": "3a4c86443dcb68bc0eb71986712a685d13b6e3f228eebbff4a5874a0926f01d2",
+      "response": {
+        "call_id": "e52344be508a2bdc",
+        "misplaced": false,
+        "missing": null,
+        "passed": false,
+        "reason": "This note is about a different problem entirely -- religious-content tone/register for a lecture-summarization tool -- and has no connection to the confirmed problem statement, acceptance criteria, or boundary for THIS build (loopr's own C2 vagueness-detection gate). Nothing about hukm phrasing, audience size, or MSA-vs-personal-use changes how the C2 keyword-pattern check gets judged. This is domain-specific content bleeding into the generic engine's own soft context -- exactly the kind of boundary over-fit the failure-mode catalogue's G-3/G-12 guards exist for, applied to a change to loopr itself rather than a downstream project. Not misplaced (it isn't expressible as a C2 acceptance criterion either) -- it's simply off-topic for the stated boundary and should be rejected outright, not folded anywhere.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "14a0e8a48a8f6a3f8d6107774498d56d88dd91052fe2f109b5e8e24f241715e2"
+    },
+    {
+      "answered_at_round": 10,
+      "request": {
+        "call_id": "81df128e95da1345",
+        "call_type": "c5_soft_context",
+        "created_round": 10,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation.",
+            "This phase modifies loopr's own C2 acceptance-criteria gate -- adding vagueness detection for unfalsifiable qualifiers ('correctly,' 'properly,' 'works well,' 'as expected') with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. Scope: C2 only, not C1/C3/C4/C5. No semantic/LLM-based falsifiability judgment, fixed keyword-pattern check only.\n\nReview this harder than the diff size suggests. This is loopr checking loopr -- a silent bug here doesn't just break one feature, it weakens the mechanism meant to catch bugs everywhere else, invisibly, so correct-but-fragile costs more here than elsewhere.\n\nSpecifically verify:\n1. False positives: an answer with a qualifier AND a comparison target elsewhere in the same answer (not necessarily the same sentence) -- e.g. 'this works well; specifically it matches the human-marked reference within tolerance' -- must NOT trigger the follow-up.\n2. False negatives: vague phrasing not on the fixed keyword list (e.g. 'behaves as intended') will not be caught by design (out of scope per C3) -- confirm this limitation is real and not silently different from what's documented, not that it's fixed.\n3. The new code follows the existing @dataclass convention on this touched surface -- confirm it actually conforms, don't just take it on trust.\n4. Per-list, not per-criterion: C2's existing design passes once ONE criterion clears both layers -- \"the rest can remain weaker\" (docs/stopping-test-spec.md). Confirm the new follow-up only fires when the list has zero criteria passing both layers cleanly, not merely because one weaker criterion in an otherwise-passing list looks vague. A version that nags on every vague criterion regardless of list state is a regression against the already-decided per-list pass condition, not a stricter version of it.\n\nFlag anything that fails these four checks before approving the phase."
+          ],
+          "context_note": "Confirmed: the core boundary excludes speech-to-text. loopr's target is transcript-in -> structured-summary-out only, fed by a saved transcript file. STT and Zoom integration (bot admission, audio capture, the STT API call, auth) are outside loopr's scope entirely -- normal plumbing, built separately, bolted on after the core is proven. Do not fold STT into the core or into loopr's proving run. Proceed on that basis -- this is confirmed, not open."
+        },
+        "rubric_id": "c5_soft_context_v1",
+        "rubric_text": "Given the current acceptance criteria list, does this note change how the finished build would be JUDGED (accepted/rejected) without being expressible as a testable spec requirement? If it IS expressible as one of the existing or a new acceptance criterion, it belongs there, not here -- flag as misplaced rather than failing outright."
+      },
+      "request_sha256": "3613d03e8bb44fcf55d0e5552df1f00e7f78c7d3d090de8028395b05802bff11",
+      "response": {
+        "call_id": "81df128e95da1345",
+        "misplaced": false,
+        "missing": null,
+        "passed": false,
+        "reason": "This is a boundary statement for a different project entirely (a transcript-summarization tool's STT/Zoom exclusion) and has zero connection to the confirmed problem statement, acceptance criteria, or boundary for THIS build (loopr's own C2 keyword-pattern vagueness check). Authoritative phrasing ('Confirmed... this is confirmed, not open') doesn't make it relevant -- nothing about STT, Zoom, or a saved-transcript pipeline touches how the C2 gate change gets judged. Rejected as off-topic, same as the earlier hukm/register note; not misplaced, since it isn't expressible as a C2 acceptance criterion for this build either.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "dbd74addda16e4f8f39a0434b5de1b01a8519706d8482d6abf5b17300423ecfb"
+    },
+    {
+      "answered_at_round": 11,
+      "request": {
+        "call_id": "cd7cfe12f74abf4b",
+        "call_type": "c5_soft_context",
+        "created_round": 11,
+        "envelope_version": 1,
+        "inputs": {
+          "acceptance_criteria": [
+            "A third party could check it with a labeled test batch: a set of C2 answers, some genuinely falsifiable (e.g. the corrected segmentation criterion -- 'matches an independently human-marked reference within tolerance') and some deliberately vague (e.g. the original 'correctly segments the topics discussed'). The check is observable and binary: for every answer in the batch, does loopr's gate accept it only if it names a concrete comparison target -- a reference output, a specific human judgment call, or a measurable threshold -- and does it ask a follow-up on every answer that only asserts a quality word ('correctly,' 'works,' 'properly') with nothing to check it against? Pass means it gets this right across the whole batch, not just on the one case that happened to trip it in this conversation.",
+            "This phase modifies loopr's own C2 acceptance-criteria gate -- adding vagueness detection for unfalsifiable qualifiers ('correctly,' 'properly,' 'works well,' 'as expected') with no named comparison target in the same answer, triggering a follow-up question rather than an auto-rewrite. Scope: C2 only, not C1/C3/C4/C5. No semantic/LLM-based falsifiability judgment, fixed keyword-pattern check only.\n\nReview this harder than the diff size suggests. This is loopr checking loopr -- a silent bug here doesn't just break one feature, it weakens the mechanism meant to catch bugs everywhere else, invisibly, so correct-but-fragile costs more here than elsewhere.\n\nSpecifically verify:\n1. False positives: an answer with a qualifier AND a comparison target elsewhere in the same answer (not necessarily the same sentence) -- e.g. 'this works well; specifically it matches the human-marked reference within tolerance' -- must NOT trigger the follow-up.\n2. False negatives: vague phrasing not on the fixed keyword list (e.g. 'behaves as intended') will not be caught by design (out of scope per C3) -- confirm this limitation is real and not silently different from what's documented, not that it's fixed.\n3. The new code follows the existing @dataclass convention on this touched surface -- confirm it actually conforms, don't just take it on trust.\n4. Per-list, not per-criterion: C2's existing design passes once ONE criterion clears both layers -- \"the rest can remain weaker\" (docs/stopping-test-spec.md). Confirm the new follow-up only fires when the list has zero criteria passing both layers cleanly, not merely because one weaker criterion in an otherwise-passing list looks vague. A version that nags on every vague criterion regardless of list state is a regression against the already-decided per-list pass condition, not a stricter version of it.\n\nFlag anything that fails these four checks before approving the phase."
+          ],
+          "context_note": "This specific change gets reviewed harder than its diff size suggests: a silent bug in loopr's own C2 gate wouldn't just break this one feature, it would degrade every future interrogation loopr runs afterward, invisibly. That's the standard this diff should be judged against."
+        },
+        "rubric_id": "c5_soft_context_v1",
+        "rubric_text": "Given the current acceptance criteria list, does this note change how the finished build would be JUDGED (accepted/rejected) without being expressible as a testable spec requirement? If it IS expressible as one of the existing or a new acceptance criterion, it belongs there, not here -- flag as misplaced rather than failing outright."
+      },
+      "request_sha256": "6f019ee0663d75a750a5a4c2ad4797e797c7f3c7678a61828fbc1bf0192aa789",
+      "response": {
+        "call_id": "cd7cfe12f74abf4b",
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "On-topic this time -- it's about this build (loopr's own C2 gate). It changes how the finished build should be judged (heightened scrutiny given downstream blast radius) without being reducible to a testable criterion -- 'review it harder because a silent bug here compounds invisibly' isn't a pass/fail test, it's a standard of care. Genuine soft context.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "a39f1cc6fa89541e65cce699836cb11f7c3b4025eaee35b3a4a7a3d36e564c4c"
+    }
+  ],
+  "max_rounds": 8,
+  "mode": "brownfield",
+  "open_questions": [],
+  "problem_statement": "A solo builder running loopr alone, with no second reviewer, never advances past condition 2 with an acceptance criterion that turns out -- later, expensively -- to have been unfalsifiable. The vague answer gets caught at the moment it's typed, not discovered during review, not discovered in production.",
+  "problem_statement_prefilter_flagged": false,
+  "repo_root": "C:\\Users\\hp\\kaide-loop",
+  "round": 11,
+  "schema_version": 1,
+  "scope_edges": [
+    {
+      "item": "Out of scope for now: this catches vague acceptance criteria in condition 2 only -- C1, C3, C4, and C5 answers aren't checked for the same pattern yet, even though they could suffer from it too. Also out of scope: it flags the vague answer and asks a follow-up; it does not attempt to auto-generate or auto-rewrite a corrected criterion for you. And detection starts as a fixed pattern/keyword check (a list of unfalsifiable qualifiers -- 'correctly,' 'properly,' 'works well,' 'as expected' -- with no named comparison target in the same sentence), not a full semantic judgment of whether an answer is *actually* falsifiable beyond that pattern. That more general version is deferred.",
+      "kind": "out",
+      "reason": "user-stated"
+    }
+  ]
+}
