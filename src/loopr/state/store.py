@@ -6,12 +6,15 @@ import json
 import os
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from loopr.errors import StateLoadError
 from loopr.models.interrogation import InterrogationState
 
 _CURRENT_SCHEMA_VERSION = 1
 
 
-class StateVersionError(ValueError):
+class StateVersionError(StateLoadError):
     """Raised when a state file carries an unrecognised schema_version. Never silently upgraded."""
 
 
@@ -31,14 +34,28 @@ class StateStore:
         return self._path.exists()
 
     def load(self) -> InterrogationState:
-        raw = self._path.read_text(encoding="utf-8")
-        payload = json.loads(raw)
+        try:
+            raw = self._path.read_text(encoding="utf-8")
+            payload = json.loads(raw)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise StateLoadError(f"state file at {self._path} is not valid JSON: {exc}") from exc
+
+        if not isinstance(payload, dict):
+            raise StateLoadError(
+                f"state file at {self._path} is valid JSON but not an object "
+                f"(got {type(payload).__name__})"
+            )
+
         version = payload.get("schema_version")
         if version != _CURRENT_SCHEMA_VERSION:
             raise StateVersionError(
                 f"unrecognised schema_version={version!r}; expected {_CURRENT_SCHEMA_VERSION}"
             )
-        return InterrogationState.model_validate(payload)
+
+        try:
+            return InterrogationState.model_validate(payload)
+        except ValidationError as exc:
+            raise StateLoadError(f"state file at {self._path} failed validation: {exc}") from exc
 
     def save(self, state: InterrogationState) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)

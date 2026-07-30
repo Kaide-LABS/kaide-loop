@@ -19,13 +19,20 @@ type JsonValue = str | int | float | bool | None | list[JsonValue] | dict[str, J
 # The machine-readable transcription of the Shape 1 / Shape 2 discipline. Must match
 # docs/stopping-test-spec.md Design approach and docs/conformance-classification-spec.md SS1/SS4
 # exactly. C1/C2/C3 are Shape 1 (single field, C1 plus its advisory flag); C5/C6/BF_* are Shape 2.
-ALLOWED_INPUTS: Mapping[JudgeCallType, frozenset[str]] = {
+#
+# Version-gated (docs/stopping-test-spec.md Condition 5, amended 2026-07-30 -- brownfield proof
+# Finding: check_scope used to validate every record, historical or new, against whichever scope is
+# live today. That breaks `loopr replay`/`emit` against any state file recorded before a rubric's
+# scope was ever tuned. Each JudgeRequest already carries envelope_version (PHASE_1_SPEC.md SS6.3.3's
+# "future version bump" guard, applied here per-record rather than per-file): check_scope looks up
+# the ALLOWED_INPUTS that was current AT THAT VERSION, not today's, so a historical record stays
+# valid forever. A scope amendment MUST bump CURRENT_ENVELOPE_VERSION and add a new entry to
+# ALLOWED_INPUTS_BY_VERSION -- never edit an existing version's entry in place.
+ALLOWED_INPUTS_V1: Mapping[JudgeCallType, frozenset[str]] = {
     JudgeCallType.C1_OUTCOME: frozenset({"problem_statement", "prefilter_flagged"}),
     JudgeCallType.C2_ACCEPTANCE: frozenset({"acceptance_criteria"}),
     JudgeCallType.C3_SCOPE_EDGES: frozenset({"scope_edges"}),
-    JudgeCallType.C5_SOFT_CONTEXT: frozenset(
-        {"context_note", "problem_statement", "acceptance_criteria", "scope_edges", "boundary"}
-    ),
+    JudgeCallType.C5_SOFT_CONTEXT: frozenset({"context_note", "acceptance_criteria"}),
     JudgeCallType.C6_LOAD_BEARING: frozenset(
         {"question_text", "acceptance_criteria", "scope_edges", "boundary"}
     ),
@@ -37,9 +44,32 @@ ALLOWED_INPUTS: Mapping[JudgeCallType, frozenset[str]] = {
     ),
 }
 
+# v2 (2026-07-30): condition 5's relevance check widened its scope to problem_statement/scope_edges/
+# boundary, per the brownfield proof run's smuggling finding. Everything else is unchanged from v1.
+ALLOWED_INPUTS_V2: Mapping[JudgeCallType, frozenset[str]] = {
+    **ALLOWED_INPUTS_V1,
+    JudgeCallType.C5_SOFT_CONTEXT: frozenset(
+        {"context_note", "problem_statement", "acceptance_criteria", "scope_edges", "boundary"}
+    ),
+}
+
+ALLOWED_INPUTS_BY_VERSION: Mapping[int, Mapping[JudgeCallType, frozenset[str]]] = {
+    1: ALLOWED_INPUTS_V1,
+    2: ALLOWED_INPUTS_V2,
+}
+
+CURRENT_ENVELOPE_VERSION = 2
+
+# The live scope, for callers building NEW requests (checks/conditions.py, tests). Always the
+# highest entry in ALLOWED_INPUTS_BY_VERSION -- kept as a top-level name for backward compatibility.
+ALLOWED_INPUTS: Mapping[JudgeCallType, frozenset[str]] = ALLOWED_INPUTS_BY_VERSION[
+    CURRENT_ENVELOPE_VERSION
+]
+
 
 class JudgeScopeError(ValueError):
-    """Raised when a JudgeRequest's inputs do not exactly match its call type's allowed scope."""
+    """Raised when a JudgeRequest's inputs do not exactly match its call type's allowed scope, as of
+    that request's own envelope_version -- or when envelope_version itself is unrecognised."""
 
 
 class JudgeRequest(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
@@ -56,17 +86,24 @@ class JudgeRequest(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseMod
     rubric_text: str = Field(min_length=1)
     inputs: dict[str, JsonValue]
     created_round: int = Field(ge=1)
-    envelope_version: int = 1
+    envelope_version: int = CURRENT_ENVELOPE_VERSION
 
     @model_validator(mode="after")
     def check_scope(self) -> "JudgeRequest":
-        allowed = ALLOWED_INPUTS[self.call_type]
+        allowed_map = ALLOWED_INPUTS_BY_VERSION.get(self.envelope_version)
+        if allowed_map is None:
+            raise JudgeScopeError(
+                f"unrecognised envelope_version={self.envelope_version!r}; known versions are "
+                f"{sorted(ALLOWED_INPUTS_BY_VERSION)}"
+            )
+        allowed = allowed_map[self.call_type]
         actual = set(self.inputs.keys())
         if actual != allowed:
             missing = allowed - actual
             extra = actual - allowed
             raise JudgeScopeError(
-                f"{self.call_type} scope violation: missing={sorted(missing)} extra={sorted(extra)}"
+                f"{self.call_type} scope violation (envelope_version={self.envelope_version}): "
+                f"missing={sorted(missing)} extra={sorted(extra)}"
             )
         return self
 
