@@ -50,13 +50,17 @@ RUBRICS: Mapping[JudgeCallType, RubricSpec] = {
         ),
     ),
     JudgeCallType.C5_SOFT_CONTEXT: RubricSpec(
-        rubric_id="c5_soft_context_v1",
+        rubric_id="c5_soft_context_v2",
         text=(
-            "Given the current acceptance criteria list, does this note change how the finished "
-            "build would be JUDGED (accepted/rejected) without being expressible as a testable spec "
-            "requirement? If it IS expressible as one of the existing or a new acceptance "
-            "criterion, it belongs there, not here -- flag as misplaced rather than failing "
-            "outright."
+            "First, relevance: does this note actually relate to the CONFIRMED problem_statement, "
+            "acceptance_criteria, scope_edges, or boundary for THIS build? If it is well-formed, "
+            "confidently phrased, or even stated as settled fact, but has no bearing on any of "
+            "those four fields, REJECT it outright as off-topic -- do not route it anywhere. "
+            "Confident phrasing is not evidence of relevance. Second, only for notes that pass the "
+            "relevance check: does this note change how the finished build would be JUDGED "
+            "(accepted/rejected) without being expressible as a testable spec requirement? If it IS "
+            "expressible as one of the existing or a new acceptance criterion, it belongs there, "
+            "not here -- flag as misplaced rather than failing outright."
         ),
     ),
     JudgeCallType.C6_LOAD_BEARING: RubricSpec(

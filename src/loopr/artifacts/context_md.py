@@ -7,7 +7,22 @@ a supersession pointer for a changed constraint rather than deletion. Mitigates 
 
 from __future__ import annotations
 
+from loopr.models.common import JudgeCallType
 from loopr.models.interrogation import InterrogationState
+
+
+def _note_is_accepted(state: InterrogationState, note_text: str) -> bool:
+    """True iff the judge's latest verdict for this exact note text was a genuine, non-misplaced
+    pass. A note the judge rejected outright (docs/stopping-test-spec.md Condition 5's relevance
+    check) has no home anywhere and must never render here -- not relocated, not superseded, simply
+    dropped from output. It stays in judge_log for audit purposes regardless."""
+    for exchange in reversed(state.judge_log):
+        if (
+            exchange.request.call_type == JudgeCallType.C5_SOFT_CONTEXT
+            and exchange.request.inputs.get("context_note") == note_text
+        ):
+            return exchange.response.passed is True and not exchange.response.misplaced
+    return False
 
 
 def render_context_md(state: InterrogationState) -> str:
@@ -21,5 +36,6 @@ def render_context_md(state: InterrogationState) -> str:
         "## Soft context (boss-said / watch-out / judged-a-failure-if)",
     ]
     for note in state.context_notes:
-        lines.append(f"- _{note.source.value}_: {note.text}")
+        if _note_is_accepted(state, note.text):
+            lines.append(f"- _{note.source.value}_: {note.text}")
     return "\n".join(lines) + "\n"

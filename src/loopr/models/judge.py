@@ -23,7 +23,9 @@ ALLOWED_INPUTS: Mapping[JudgeCallType, frozenset[str]] = {
     JudgeCallType.C1_OUTCOME: frozenset({"problem_statement", "prefilter_flagged"}),
     JudgeCallType.C2_ACCEPTANCE: frozenset({"acceptance_criteria"}),
     JudgeCallType.C3_SCOPE_EDGES: frozenset({"scope_edges"}),
-    JudgeCallType.C5_SOFT_CONTEXT: frozenset({"context_note", "acceptance_criteria"}),
+    JudgeCallType.C5_SOFT_CONTEXT: frozenset(
+        {"context_note", "problem_statement", "acceptance_criteria", "scope_edges", "boundary"}
+    ),
     JudgeCallType.C6_LOAD_BEARING: frozenset(
         {"question_text", "acceptance_criteria", "scope_edges", "boundary"}
     ),

@@ -25,7 +25,13 @@ def test_misplaced_note_is_removed_from_context_notes_not_duplicated(
         call_type=JudgeCallType.C5_SOFT_CONTEXT,
         rubric_id="c5_soft_context_v1",
         rubric_text="rubric",
-        inputs={"context_note": note_text, "acceptance_criteria": []},
+        inputs={
+            "context_note": note_text,
+            "problem_statement": None,
+            "acceptance_criteria": [],
+            "scope_edges": [],
+            "boundary": None,
+        },
         created_round=1,
     )
     response = JudgeResponse(
@@ -59,7 +65,13 @@ def test_misplaced_note_only_removes_the_matching_entry(
         call_type=JudgeCallType.C5_SOFT_CONTEXT,
         rubric_id="c5_soft_context_v1",
         rubric_text="rubric",
-        inputs={"context_note": misplaced_text, "acceptance_criteria": []},
+        inputs={
+            "context_note": misplaced_text,
+            "problem_statement": None,
+            "acceptance_criteria": [],
+            "scope_edges": [],
+            "boundary": None,
+        },
         created_round=1,
     )
     response = JudgeResponse(

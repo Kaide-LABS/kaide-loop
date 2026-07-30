@@ -78,17 +78,24 @@ class ConditionResult(LooprBase):  # type: ignore[explicit-any]  # pydantic Base
     judge_pass: bool | None
     overall: bool
     detail: str
+    force_resolved: bool = False
+    """True iff the round cap (docs/stopping-test-spec.md Condition 6 B2) resolved this condition
+    with a visible Assumption rather than a genuine structural+judge pass."""
 
     @model_validator(mode="after")
     def check_two_layer_invariant(self) -> "ConditionResult":
         if self.overall:
             if not self.structural_pass:
                 raise ValueError("overall cannot be True when structural_pass is False")
-            judge_ok = self.judge_pass is True or self.condition == ConditionId.C4_BOUNDARY
+            judge_ok = (
+                self.judge_pass is True
+                or self.condition == ConditionId.C4_BOUNDARY
+                or self.force_resolved
+            )
             if not judge_ok:
                 raise ValueError(
-                    "overall cannot be True unless judge_pass is True (or condition is C4, "
-                    "which has no judge)"
+                    "overall cannot be True unless judge_pass is True, condition is C4 (which has "
+                    "no judge), or the condition was force_resolved by the round cap"
                 )
         return self
 
@@ -107,6 +114,9 @@ class InterrogationState(LooprBase):  # type: ignore[explicit-any]  # pydantic B
     assumptions: list[Assumption] = Field(default_factory=list)
     condition_results: list[ConditionResult] = Field(default_factory=list)
     consecutive_judge_failures: dict[ConditionId, int] = Field(default_factory=dict)
+    force_resolved_conditions: set[ConditionId] = Field(default_factory=set)
+    """Conditions 1-5 the round cap has force-resolved with a visible Assumption (docs/stopping-test-
+    spec.md Condition 6 B2). Distinct from open_questions' own force_resolved flag, which covers C6."""
     round: int = Field(default=1, ge=1)
     max_rounds: int = Field(default=8, ge=1, le=50)
     gates: dict[GateId, GateRecord] = Field(default_factory=dict)

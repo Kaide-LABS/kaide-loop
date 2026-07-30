@@ -72,9 +72,13 @@ def _scoped_inputs(condition: ConditionId, state: InterrogationState) -> dict[st
         if unresolved is None:
             return None
         note = state.context_notes[unresolved]
+        boundary_text = state.boundary.text if state.boundary is not None else None
         return {
             "context_note": note.text,
+            "problem_statement": state.problem_statement,
             "acceptance_criteria": [c.text for c in state.acceptance_criteria],
+            "scope_edges": [e.item for e in state.scope_edges],
+            "boundary": boundary_text,
         }
     if condition == ConditionId.C6_NO_UNKNOWNS:
         question = _first_unjudged_question(state)
@@ -174,6 +178,19 @@ def evaluate_all(state: InterrogationState) -> EvaluationOutcome:
     pending: JudgeRequest | None = None
 
     for condition in _CONDITION_ORDER:
+        if condition in state.force_resolved_conditions:
+            results.append(
+                ConditionResult(
+                    condition=condition,
+                    structural_pass=True,
+                    judge_pass=None,
+                    overall=True,
+                    force_resolved=True,
+                    detail="force-resolved at the round cap; see Assumptions in the baby PRD",
+                )
+            )
+            continue
+
         structural = _STRUCTURAL[condition](state)
 
         if not structural.passed:

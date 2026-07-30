@@ -122,7 +122,14 @@ def _apply_judge_exchange(
 
 
 def _force_resolve_round_cap(state: InterrogationState) -> InterrogationState:
-    """Guard G-6: every force-resolution writes a visible Assumption. Never silent."""
+    """Guard G-6: every force-resolution writes a visible Assumption. Never silent.
+
+    Generalized (docs/stopping-test-spec.md Condition 6 B2, amended 2026-07-30): at the round cap,
+    any of conditions 1-5 still false is force-resolved too, not only C6's open-question ledger --
+    otherwise a condition that never produces an OpenQuestion (e.g. C5) can run past max_rounds with
+    no termination guarantee, as the brownfield proof run demonstrated (Finding 5).
+    """
+    from loopr.checks.conditions import evaluate_all
     from loopr.models.common import QuestionStatus
 
     for question in state.open_questions:
@@ -135,6 +142,25 @@ def _force_resolve_round_cap(state: InterrogationState) -> InterrogationState:
         state.assumptions.append(
             Assumption(text=guess, source_question_id=question.id, created_round=state.round)
         )
+
+    for result in evaluate_all(state).results:
+        if result.overall or result.condition == ConditionId.C6_NO_UNKNOWNS:
+            continue
+        if result.condition in state.force_resolved_conditions:
+            continue
+        guess = (
+            f"(assumed, round cap reached) condition {result.condition.value} force-resolved: "
+            f"{result.detail}"
+        )
+        state.assumptions.append(
+            Assumption(
+                text=guess,
+                source_question_id=f"condition:{result.condition.value}",
+                created_round=state.round,
+            )
+        )
+        state.force_resolved_conditions.add(result.condition)
+
     return state
 
 
