@@ -33,7 +33,11 @@ class ConditionId(str, Enum):
 
 
 class JudgeCallType(str, Enum):
-    """Deliberately does NOT include C4 -- condition 4 is a pure state-machine check, no rubric."""
+    """Deliberately does NOT include C4 -- condition 4 itself is a pure state-machine check, no
+    rubric. BOUNDARY_PROPOSAL is a distinct thing: a one-off drafting call that runs UPSTREAM of
+    condition 4, to give Gate 2 real content to show, before condition 4's own confirm-only check
+    ever runs. Added 2026-08-01 -- see docs/stopping-test-spec.md Condition 4's boundary-drafting
+    amendment."""
 
     C1_OUTCOME = "c1_outcome"
     C2_ACCEPTANCE = "c2_acceptance"
@@ -42,6 +46,7 @@ class JudgeCallType(str, Enum):
     C6_LOAD_BEARING = "c6_load_bearing"
     BF_RELEVANCE = "bf_relevance"
     BF_CLASSIFY = "bf_classify"
+    BOUNDARY_PROPOSAL = "boundary_proposal"
 
 
 class QuestionStatus(str, Enum):

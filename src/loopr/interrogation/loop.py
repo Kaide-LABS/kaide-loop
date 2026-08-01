@@ -38,7 +38,7 @@ from loopr.judge.port import JudgeClient
 from loopr.models.brownfield import PatternClassification
 from loopr.models.common import ConditionId, GateId, JudgeCallType, Mode
 from loopr.models.gates import GatePayload
-from loopr.models.interrogation import Assumption, InterrogationState, OpenQuestion
+from loopr.models.interrogation import Assumption, Boundary, InterrogationState, OpenQuestion
 from loopr.models.judge import JudgeExchange, JudgeRequest, JudgeResponse
 
 _MAX_INTERNAL_ITERATIONS = 200
@@ -183,21 +183,13 @@ def step(
         state = _apply_inbound(state, inbound)
 
     if state.mode == Mode.BROWNFIELD and state.brownfield is not None:
-        boundary_settled = state.boundary is not None and (
-            state.boundary.confirmed or state.boundary.declined
-        )
         brownfield = state.brownfield
 
-        if boundary_settled and not brownfield.touched_surface:
-            candidates = prefilter_candidates(Path(state.repo_root), state)
-            request = build_relevance_request(candidates, state)
-            response = judge.ask(request)
-            if response is None:
-                return StepOutcome(
-                    state=state, exit_code=exit_codes.JUDGE_REQUIRED, pending_judge_request=request
-                )
-            state = _apply_judge_exchange(state, request, response)
-            state = apply_relevance_response(state, response)
+        # Touched-surface discovery no longer gates on "boundary settled" (confirmed/declined) --
+        # it now runs alongside boundary-proposal drafting, inside the C4_BOUNDARY branch below,
+        # before Gate 2 ever renders (2026-08-01 fix; see docs/stopping-test-spec.md Condition 4).
+        # Gating it on confirmation meant touched_surface only populated AFTER a first, boundary-only
+        # Gate 2 confirm -- changing the rendered payload and forcing Gate 2 to re-fire a second time.
 
         if brownfield.touched_surface and not brownfield.pattern_candidates:
             brownfield.pattern_candidates = discover_patterns(
@@ -250,7 +242,52 @@ def step(
                 # Condition 4 is a pure state-machine check (no judge, no free-text question) --
                 # it is resolved through Gate 2, which fires during interrogation, before Gate 1
                 # (loopr-PRD.md section 4; docs/conformance-classification-spec.md section 6).
-                from loopr.gates.gates import render_gate_2_body
+                from loopr.gates.gates import build_boundary_proposal_request, render_gate_2_body
+
+                # Boundary proposal drafting (2026-08-01 fix): loopr-PRD.md SS A3 says loopr
+                # "analyzes and proposes a boundary" before asking for confirmation, but nothing
+                # used to draft one -- Gate 2 rendered with an empty proposal section unless the
+                # user supplied boundary_text themselves, which inverts the design (confirm YOUR
+                # draft, not loopr's proposal). This drafts one upstream of Gate 2's render; it
+                # never sets confirmed=True -- genuine human confirmation through Gate 2 remains
+                # the only path to condition 4 passing.
+                if state.boundary is None:
+                    proposal_request = build_boundary_proposal_request(state)
+                    proposal_response = judge.ask(proposal_request)
+                    if proposal_response is None:
+                        return StepOutcome(
+                            state=state,
+                            exit_code=exit_codes.JUDGE_REQUIRED,
+                            pending_judge_request=proposal_request,
+                        )
+                    state = _apply_judge_exchange(state, proposal_request, proposal_response)
+                    if proposal_response.drafted_text is None:
+                        raise StateInvariantError(
+                            "BOUNDARY_PROPOSAL response must carry drafted_text"
+                        )
+                    state.boundary = Boundary(text=proposal_response.drafted_text, confirmed=False)
+
+                # Touched-surface discovery (2026-08-01 fix, FIX 2): runs alongside boundary
+                # drafting, before Gate 2's FIRST render, so the user confirms boundary and touched
+                # surface together in one sitting -- not boundary first, then a second Gate 2 firing
+                # once discovery finally runs (loopr-PRD.md SS A3 / conformance-classification-spec
+                # SS1: "this same confirmation also covers the touched-surface list").
+                if (
+                    state.mode == Mode.BROWNFIELD
+                    and state.brownfield is not None
+                    and not state.brownfield.touched_surface
+                ):
+                    candidates = prefilter_candidates(Path(state.repo_root), state)
+                    relevance_request = build_relevance_request(candidates, state)
+                    relevance_response = judge.ask(relevance_request)
+                    if relevance_response is None:
+                        return StepOutcome(
+                            state=state,
+                            exit_code=exit_codes.JUDGE_REQUIRED,
+                            pending_judge_request=relevance_request,
+                        )
+                    state = _apply_judge_exchange(state, relevance_request, relevance_response)
+                    state = apply_relevance_response(state, relevance_response)
 
                 body = render_gate_2_body(state)
                 payload = build_gate_payload(GateId.GATE_2_BOUNDARY, "Gate 2 -- Boundary", body)

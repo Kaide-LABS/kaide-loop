@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from loopr.judge.envelope import digest
-from loopr.models.common import GateId, LooprBase, Verdict
+from loopr.judge.envelope import digest, make_call_id
+from loopr.models.common import GateId, JudgeCallType, LooprBase, Verdict
 from loopr.models.gates import GatePayload, GateRecord
 from loopr.models.interrogation import Boundary, InterrogationState
+from loopr.models.judge import JsonValue, JudgeRequest
+from loopr.rubrics import RUBRICS
 
 
 class GateResponse(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
@@ -25,6 +27,28 @@ class GateResponse(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseMod
     boundary_text: str | None = None
     declined: bool = False
     touched_surface: list[str] | None = None
+
+
+def build_boundary_proposal_request(state: InterrogationState) -> JudgeRequest:
+    """A one-off drafting call, upstream of condition 4 and Gate 2's render -- gives the gate real
+    proposed content to show instead of an empty section a user must author themselves (added
+    2026-08-01; see docs/stopping-test-spec.md Condition 4's boundary-drafting amendment)."""
+    inputs: dict[str, JsonValue] = {
+        "problem_statement": state.problem_statement,
+        "acceptance_criteria": [c.text for c in state.acceptance_criteria],
+        "scope_edges": [e.item for e in state.scope_edges],
+        "context_notes": [n.text for n in state.context_notes],
+    }
+    rubric = RUBRICS[JudgeCallType.BOUNDARY_PROPOSAL]
+    call_id = make_call_id(JudgeCallType.BOUNDARY_PROPOSAL.value, state.round, inputs)
+    return JudgeRequest(
+        call_id=call_id,
+        call_type=JudgeCallType.BOUNDARY_PROPOSAL,
+        rubric_id=rubric.rubric_id,
+        rubric_text=rubric.text,
+        inputs=inputs,
+        created_round=state.round,
+    )
 
 
 def build_gate_payload(gate: GateId, title: str, body_markdown: str) -> GatePayload:

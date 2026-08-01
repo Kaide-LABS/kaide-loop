@@ -25,6 +25,10 @@ def _answer_pending_judge(state_dir: Path, answer_path: Path) -> None:
     elif call_type == "bf_relevance":
         candidates = request["inputs"]["candidate_files"]
         response = JudgeResponse(call_id=request["call_id"], selected_files=candidates, reason="all relevant")
+    elif call_type == "boundary_proposal":
+        response = JudgeResponse(
+            call_id=request["call_id"], drafted_text="drafted boundary text", reason="drafted"
+        )
     else:
         response = JudgeResponse(call_id=request["call_id"], passed=True, reason="ok")
 

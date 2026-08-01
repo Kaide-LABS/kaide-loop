@@ -105,4 +105,17 @@ RUBRICS: Mapping[JudgeCallType, RubricSpec] = {
             "over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
         ),
     ),
+    JudgeCallType.BOUNDARY_PROPOSAL: RubricSpec(
+        rubric_id="boundary_proposal_v1",
+        text=(
+            "Given the confirmed problem statement, acceptance criteria, scope edges, and soft "
+            "context notes so far, draft a plain-language boundary proposal: a short statement of "
+            "what this build covers and what it explicitly does not, grounded only in what has "
+            "actually been said in those fields -- never invent scope, never import an example from "
+            "another project, never generalize beyond what the confirmed fields actually support. "
+            "This is a DRAFT for the human to confirm or tweak at Gate 2, not a final decision -- "
+            "state it as a proposal, not settled fact. Return the drafted text only; do not set "
+            "confirmed status, that is the human's action alone."
+        ),
+    ),
 }

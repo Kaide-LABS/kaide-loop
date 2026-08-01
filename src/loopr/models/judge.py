@@ -46,10 +46,17 @@ ALLOWED_INPUTS_V1: Mapping[JudgeCallType, frozenset[str]] = {
 
 # v2 (2026-07-30): condition 5's relevance check widened its scope to problem_statement/scope_edges/
 # boundary, per the brownfield proof run's smuggling finding. Everything else is unchanged from v1.
+#
+# Also carries BOUNDARY_PROPOSAL (added 2026-08-01): a wholly new call type, not a scope change to an
+# existing one, so no historical record can ever reference it -- safe to add directly to the current
+# version's map rather than needing its own version bump. See docs/stopping-test-spec.md Condition 4.
 ALLOWED_INPUTS_V2: Mapping[JudgeCallType, frozenset[str]] = {
     **ALLOWED_INPUTS_V1,
     JudgeCallType.C5_SOFT_CONTEXT: frozenset(
         {"context_note", "problem_statement", "acceptance_criteria", "scope_edges", "boundary"}
+    ),
+    JudgeCallType.BOUNDARY_PROPOSAL: frozenset(
+        {"problem_statement", "acceptance_criteria", "scope_edges", "context_notes"}
     ),
 }
 
@@ -113,6 +120,11 @@ class JudgeResponse(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseMo
     passed: bool | None = None
     verdict: Verdict | None = None
     selected_files: list[str] | None = None
+    drafted_text: str | None = None
+    """Free-text drafted content -- currently only BOUNDARY_PROPOSAL's response shape. Added
+    2026-08-01: none of the other three shapes (a pass/fail, a four-way verdict, a file selection)
+    can carry drafted prose, and the judge genuinely needs to draft one here (see
+    docs/stopping-test-spec.md Condition 4)."""
     reason: str = Field(min_length=1)
     missing: str | None = None
     misplaced: bool = False
@@ -125,12 +137,14 @@ class JudgeResponse(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseMo
                 ("passed", self.passed),
                 ("verdict", self.verdict),
                 ("selected_files", self.selected_files),
+                ("drafted_text", self.drafted_text),
             )
             if value is not None
         ]
         if len(populated) > 1:
             raise ValueError(
-                f"exactly one of passed/verdict/selected_files may be set, got: {populated}"
+                f"exactly one of passed/verdict/selected_files/drafted_text may be set, got: "
+                f"{populated}"
             )
         return self
 

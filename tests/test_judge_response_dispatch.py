@@ -77,6 +77,10 @@ def test_mismatched_judge_response_is_a_hard_error_not_a_silent_drop(tmp_path: P
             response = JudgeResponse(
                 call_id=request["call_id"], verdict=Verdict.CONFORM, reason="looks fine"
             )
+        elif call_type == "boundary_proposal":
+            response = JudgeResponse(
+                call_id=request["call_id"], drafted_text="drafted boundary text", reason="drafted"
+            )
         else:
             response = JudgeResponse(call_id=request["call_id"], passed=True, reason="ok")
         judge_response_path.write_text(response.model_dump_json(), encoding="utf-8")
@@ -95,28 +99,22 @@ def test_mismatched_judge_response_is_a_hard_error_not_a_silent_drop(tmp_path: P
     for _ in range(50):
         if code == exit_codes.JUDGE_REQUIRED:
             request = json.loads((state_dir / "pending_judge.json").read_text(encoding="utf-8"))
-            if request["call_type"] == "bf_relevance":
+            if request["call_type"] == "bf_classify":
                 break
             code = answer_pending_judge()
         elif code == exit_codes.QUESTION_REQUIRED:
             answer_path.write_text(next(answers), encoding="utf-8")
             code = main(["step", "--state", str(state_path), "--answer", str(answer_path)])
         elif code == exit_codes.GATE_REQUIRED:
-            gate_response_path.write_text(
-                json.dumps({"confirmed": True, "boundary_text": "retry pattern scope only"}),
-                encoding="utf-8",
-            )
+            gate_response_path.write_text(json.dumps({"confirmed": True}), encoding="utf-8")
             code = main(
                 ["step", "--state", str(state_path), "--gate-response", str(gate_response_path)]
             )
         else:
-            raise AssertionError(f"unexpected exit code {code} before relevance stage")
+            raise AssertionError(f"unexpected exit code {code} before the classify stage")
     else:
-        raise AssertionError("did not reach the relevance judge call")
+        raise AssertionError("did not reach a pending bf_classify judge call")
 
-    # Answer relevance -> triggers pattern discovery -> a pending bf_classify call.
-    code = answer_pending_judge()
-    assert code == exit_codes.JUDGE_REQUIRED
     pending = json.loads((state_dir / "pending_judge.json").read_text(encoding="utf-8"))
     assert pending["call_type"] == "bf_classify"
 
