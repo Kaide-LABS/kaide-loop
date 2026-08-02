@@ -125,3 +125,28 @@ def test_not_valid_json_raises_clean_loopr_error(tmp_path: Path) -> None:
     store = StateStore(path)
     with pytest.raises(StateLoadError):
         store.load()
+
+
+def test_customization_state_round_trips(tmp_path: Path) -> None:
+    """CUSTOMIZATION_PHASE_1_SPEC.md SS2: "verify the new state field round-trips" -- checked
+    directly rather than assumed."""
+    from loopr.models.customization import CustomizationState, FidelityResult, TemplateSkeleton
+
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path))
+    state.customization = CustomizationState(
+        step10_template_path=str(tmp_path / "STEP_10"),
+        step10_skeleton=TemplateSkeleton(convention="all_caps", sections=["ROLE", "1. FIRST"]),
+        step10_output_path=str(tmp_path / "out.md"),
+        step10_fidelity=FidelityResult(
+            structural_pass=True, judge_pass=True, overall=True, detail="ok"
+        ),
+    )
+    store = StateStore(tmp_path / "state.json")
+    store.save(state)
+    reloaded = store.load()
+
+    assert reloaded.customization is not None
+    assert reloaded.customization.step10_skeleton.sections == ["ROLE", "1. FIRST"]
+    assert reloaded.customization.step10_fidelity is not None
+    assert reloaded.customization.step10_fidelity.overall is True
+    assert reloaded == state

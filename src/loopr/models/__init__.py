@@ -4,6 +4,7 @@ from loopr.models.brownfield import BrownfieldState, EvidenceBundle, PatternClas
 from loopr.models.common import (
     Centrality,
     ConditionId,
+    CustomizationStep,
     GateId,
     JudgeCallType,
     LooprBase,
@@ -13,6 +14,13 @@ from loopr.models.common import (
     QuestionStatus,
     ScopeEdgeKind,
     Verdict,
+)
+from loopr.models.customization import (
+    CustomizationState,
+    CustomizedPrompt,
+    FidelityResult,
+    PlaceholderBinding,
+    TemplateSkeleton,
 )
 from loopr.models.gates import GatePayload, GateRecord
 from loopr.models.interrogation import (
@@ -49,7 +57,11 @@ __all__ = [
     "ConditionId",
     "ConditionResult",
     "ContextNote",
+    "CustomizationState",
+    "CustomizationStep",
+    "CustomizedPrompt",
     "EvidenceBundle",
+    "FidelityResult",
     "GateId",
     "GatePayload",
     "GateRecord",
@@ -65,9 +77,11 @@ __all__ = [
     "NoteSource",
     "OpenQuestion",
     "PatternClassification",
+    "PlaceholderBinding",
     "QuestionOrigin",
     "QuestionStatus",
     "ScopeEdge",
     "ScopeEdgeKind",
+    "TemplateSkeleton",
     "Verdict",
 ]

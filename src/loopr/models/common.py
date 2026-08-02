@@ -47,6 +47,14 @@ class JudgeCallType(str, Enum):
     BF_RELEVANCE = "bf_relevance"
     BF_CLASSIFY = "bf_classify"
     BOUNDARY_PROPOSAL = "boundary_proposal"
+    STEP10_CUSTOMIZATION = "step10_customization"
+    STEP10_FIDELITY_JUDGE = "step10_fidelity_judge"
+    """Layer 2 of the customization fidelity check (CUSTOMIZATION_PHASE_1_SPEC.md SS4.3) -- a
+    distinct call type from STEP10_CUSTOMIZATION, not mentioned by name in that spec's SS2 file
+    list (which said to add "the new call type", singular). Required because JudgeResponse's
+    exactly-one-of-four shape means a single response can carry drafted_text (the customization) OR
+    passed (the genuineness judgment), never both -- two structurally different response shapes
+    cannot share one call type under the existing schema. Disclosed deviation, not silent."""
 
 
 class QuestionStatus(str, Enum):
@@ -87,3 +95,14 @@ class GateId(str, Enum):
     GATE_1_BABY_PRD = "gate_1_baby_prd"
     GATE_2_BOUNDARY = "gate_2_boundary"
     GATE_3_CONFLICTS = "gate_3_conflicts"
+
+
+class CustomizationStep(str, Enum):
+    """Identifies which template a discovery/skeleton-extraction result belongs to. All three exist
+    as a type since template discovery must handle all three on-disk files' inconsistent naming
+    (CUSTOMIZATION_PHASE_1_SPEC.md SS4.2) -- only STEP_10 is wired to the `loopr customize` CLI in
+    Phase 1; STEP_11/STEP_12 customization itself is Phase 2, not built here."""
+
+    STEP_10 = "step_10"
+    STEP_11 = "step_11"
+    STEP_12 = "step_12"

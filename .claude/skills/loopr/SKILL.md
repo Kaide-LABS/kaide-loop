@@ -89,6 +89,22 @@ loopr emit --state <target>/.loopr-state/state.json
 Renders `baby_prd.md`, `context.md`, and (brownfield) `conformance-ledger.md` to
 `<target>/.claude/loopr/`. Refuses unless all six conditions genuinely pass -- never emit early.
 
+### 4. Customize step 10 (optional, once COMPLETE)
+
+```
+loopr customize --state <target>/.loopr-state/state.json --step 10
+```
+
+Produces a genuinely customized `step10` prompt from the confirmed artifacts -- not a template with
+placeholders merely deleted. Handle exit codes the same way as `step`: `10` `JUDGE_REQUIRED` (answer
+the customization or fidelity-judgment call honestly, same discipline as any other judge call, then
+re-invoke with `--judge-response`), `0` `OK` (done -- the customized prompt is at the printed path),
+`40` `HALT` (the fidelity check rejected the customization -- a restructured template or generic
+filler; this is a real failure, never silently retried). Session topology never matters here: this
+reads only the state file and confirmed artifacts, so whether you're the same session that ran the
+interrogation or a fresh one makes no difference to the result. `--step 11`/`--step 12` and driving
+the phase loop itself are not yet built -- only step 10 customization exists so far.
+
 ### Optional: verify reproducibility
 
 ```

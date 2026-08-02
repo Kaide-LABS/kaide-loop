@@ -122,6 +122,7 @@ class InterrogationState(LooprBase):  # type: ignore[explicit-any]  # pydantic B
     gates: dict[GateId, GateRecord] = Field(default_factory=dict)
     brownfield: "BrownfieldState | None" = None
     judge_log: list["JudgeExchange"] = Field(default_factory=list)
+    customization: "CustomizationState | None" = None
 
     @model_validator(mode="after")
     def check_mode_coherent(self) -> "InterrogationState":
@@ -132,6 +133,7 @@ class InterrogationState(LooprBase):  # type: ignore[explicit-any]  # pydantic B
 
 
 from loopr.models.brownfield import BrownfieldState  # noqa: E402
+from loopr.models.customization import CustomizationState  # noqa: E402
 from loopr.models.judge import JudgeExchange  # noqa: E402
 
 InterrogationState.model_rebuild()

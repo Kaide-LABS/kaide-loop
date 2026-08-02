@@ -118,4 +118,34 @@ RUBRICS: Mapping[JudgeCallType, RubricSpec] = {
             "confirmed status, that is the human's action alone."
         ),
     ),
+    JudgeCallType.STEP10_CUSTOMIZATION: RubricSpec(
+        rubric_id="step10_customization_v1",
+        text=(
+            "Customize this template for THIS project, using only the confirmed problem statement, "
+            "acceptance criteria, scope edges, boundary, soft context notes, and conformance summary "
+            "given -- never invent detail, never import an example from another project. This is a "
+            "synthesis task, not a pass/fail judgment: fill and adapt every placeholder you can "
+            "resolve from the given fields; where a placeholder's value is not yet knowable (e.g. it "
+            "depends on this template's own future output), leave it exactly as it appears in the "
+            "template -- do not guess, do not delete it, do not fabricate a plausible-looking value. "
+            "PRESERVE EVERY SECTION, IN THE SAME ORDER, WITH THE SAME HEADERS -- fill and adapt, "
+            "never restructure, condense, reorder, or rewrite the template's own shape. Tags and "
+            "reject-pattern shorthand that merely LOOK like placeholders (e.g. a bracketed tag the "
+            "executing model is instructed to emit, or bracketed shorthand inside a rejection rule) "
+            "are not placeholders -- leave them completely untouched, byte-for-byte. Return the "
+            "customized text only."
+        ),
+    ),
+    JudgeCallType.STEP10_FIDELITY_JUDGE: RubricSpec(
+        rubric_id="step10_fidelity_judge_v1",
+        text=(
+            "Given the original template and the customized output, is the injected content "
+            "genuinely specific to THIS project -- naming its actual files, invariants, boundary, "
+            "and stack -- or is it generic filler that would read identically for any project? "
+            "Verbatim template text with placeholders merely deleted (not replaced with real, "
+            "project-specific content) is a FAIL, not a pass. Reject outright if any resolved value "
+            "could describe an arbitrary, unrelated project rather than the one actually described "
+            "by the given problem statement, acceptance criteria, and boundary."
+        ),
+    ),
 }

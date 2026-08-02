@@ -60,12 +60,45 @@ ALLOWED_INPUTS_V2: Mapping[JudgeCallType, frozenset[str]] = {
     ),
 }
 
+# v3 (2026-08-02): adds the two customization call types (CUSTOMIZATION_PHASE_1_SPEC.md SS4.1).
+# STEP10_CUSTOMIZATION's input set is deliberately wider than any prior call -- disclosed, not
+# smuggled in: customization is a synthesis, not a judgment (see the rubric text), so it legitimately
+# needs more of the confirmed record than a pass/fail check does. The discipline that still applies:
+# the set is explicit and version-gated, never "the whole transcript" or "whatever is in state."
+# STEP10_FIDELITY_JUDGE is layer 2 of the fidelity check -- a distinct call type from
+# STEP10_CUSTOMIZATION, required by JudgeResponse's exactly-one-of-four response shape (a single
+# response cannot carry both drafted_text and passed).
+ALLOWED_INPUTS_V3: Mapping[JudgeCallType, frozenset[str]] = {
+    **ALLOWED_INPUTS_V2,
+    JudgeCallType.STEP10_CUSTOMIZATION: frozenset(
+        {
+            "template_text",
+            "problem_statement",
+            "acceptance_criteria",
+            "scope_edges",
+            "boundary",
+            "context_notes",
+            "conformance_summary",
+        }
+    ),
+    JudgeCallType.STEP10_FIDELITY_JUDGE: frozenset(
+        {
+            "template_text",
+            "customized_text",
+            "problem_statement",
+            "acceptance_criteria",
+            "boundary",
+        }
+    ),
+}
+
 ALLOWED_INPUTS_BY_VERSION: Mapping[int, Mapping[JudgeCallType, frozenset[str]]] = {
     1: ALLOWED_INPUTS_V1,
     2: ALLOWED_INPUTS_V2,
+    3: ALLOWED_INPUTS_V3,
 }
 
-CURRENT_ENVELOPE_VERSION = 2
+CURRENT_ENVELOPE_VERSION = 3
 
 # The live scope, for callers building NEW requests (checks/conditions.py, tests). Always the
 # highest entry in ALLOWED_INPUTS_BY_VERSION -- kept as a top-level name for backward compatibility.
