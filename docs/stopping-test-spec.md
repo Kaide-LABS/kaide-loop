@@ -299,6 +299,55 @@ the catch-all last check).
 
 ---
 
+## Gate 1's amendment mechanism (added 2026-08-01 — the "correct is a no-op" gap)
+
+`loopr-PRD.md` promises Gate 1 lets the user "confirm or correct" the baby PRD's TL;DR. Traced
+precisely: `gates.py`'s `apply_gate_response` had exactly one branch for any gate other than
+`GATE_2_BOUNDARY` — "if `confirmed` and the payload digest matches: mark confirmed." A decline or
+correction (`confirmed=False`) was a complete no-op — not even the `amendment` free-text note got
+stored. This directly undermined the spec-time TL;DR moment, one of the three headline acceptance
+signals (`loopr-PRD.md` §3).
+
+**Closed two ways:**
+
+1. **The shared bug (any non-Gate-2 gate):** `amendment` is now stored regardless of whether the
+   response resulted in a fresh confirm — a correction is never silently discarded, even before any
+   gate-specific revision mechanism applies.
+2. **Gate 1 specifically:** `GateResponse` gained three optional revision fields —
+   `problem_statement_revision: str | None`, `acceptance_criteria_revision: list[str] | None`,
+   `scope_edges_revision: list[str] | None`. Supplying one resets the corresponding field(s) on
+   `InterrogationState`. **This is deliberately NOT a trusted overwrite** the way Gate 2's
+   `boundary_text` is — condition 4 has an explicit, stated exception ("judged once, at proposal
+   time... not re-litigated," above); conditions 1-3 do not. A Gate 1 revision is still an answer to
+   whichever of C1/C2/C3 it targets, so it must clear the same bar a fresh answer would: resetting
+   the field means `evaluate_all`'s dedup-by-exact-value matching (`_latest_response_for`,
+   `checks/conditions.py`) can no longer find a cached verdict for the new value, so the condition
+   re-runs its full structural-then-judge check on the next round, exactly as if the user had
+   answered fresh. A revision that would fail condition 2's structural check (no observable
+   predicate, say) fails it the same way a fresh vague answer would — arriving via a Gate 1
+   amendment field earns it no special trust.
+
+   Gate 1 never marks itself confirmed when a revision was applied, even if `confirmed=True` was
+   also sent in the same response — a revision always requires a subsequent, genuine re-confirm once
+   the affected condition(s) re-pass. This holds even retroactively: applying a revision to an
+   ALREADY-confirmed Gate 1 record still correctly re-invalidates it, because `gate_is_satisfied`'s
+   digest comparison (not a separate dirty flag) is what actually gates confirmation — the same
+   principle Gate 2's boundary already relied on.
+
+**Gate 3 investigated, not yet fixed.** `PatternClassification` carries no per-pattern override
+field, and `GateResponse` has no per-pattern amendment structure (unlike `touched_surface`, a flat
+list override). The shared amendment-storage fix above applies to Gate 3 too, closing the
+"correction silently discarded" half of the bug. But a genuine per-pattern "override this verdict"
+mechanism needs its own design: Gate 3 is the design's own human-escalation *endpoint* for CONFLICT
+verdicts (`docs/conformance-classification-spec.md` §5 — CONFLICT "escalates to HUMAN GATE 3,"
+never re-litigated by a judge), so the correct parity is with Gate 2's trusted boundary override, not
+Gate 1's route-through-judge design. Proposed shape (not implemented): a
+`conflict_overrides: dict[str, Verdict] | None` field, applied as a direct, trusted overwrite of the
+matching `PatternClassification.verdict` — deferred until a real run actually exercises a CONFLICT
+verdict, since none has yet.
+
+---
+
 ## Decisions (closed)
 
 1. **Round cap = 8**, kept as the starting default. Calibratable against task 3's real

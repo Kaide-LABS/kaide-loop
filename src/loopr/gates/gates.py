@@ -27,6 +27,15 @@ class GateResponse(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseMod
     boundary_text: str | None = None
     declined: bool = False
     touched_surface: list[str] | None = None
+    problem_statement_revision: str | None = None
+    acceptance_criteria_revision: list[str] | None = None
+    scope_edges_revision: list[str] | None = None
+    """Gate 1's "correct" action (added 2026-08-01). Unlike Gate 2's boundary_text, these are NOT
+    trusted overwrites -- conditions 1-3 have no "judged once, not re-litigated" exception the way
+    condition 4 does. Applying a revision resets the field(s) and routes back through the SAME
+    structural-then-judge evaluation any fresh answer to C1/C2/C3 gets (see _apply_gate_1_revision),
+    rather than silently marking the corrected content confirmed. See
+    docs/stopping-test-spec.md's Gate 1 amendment note."""
 
 
 def build_boundary_proposal_request(state: InterrogationState) -> JudgeRequest:
@@ -93,11 +102,57 @@ def apply_gate_response(state: InterrogationState, response: GateResponse) -> In
             record.user_amendment = response.amendment
         return state
 
+    if response.gate == GateId.GATE_1_BABY_PRD and _apply_gate_1_revision(state, response):
+        # A revision was applied. Do NOT mark this gate confirmed even if response.confirmed=True
+        # was also sent -- conditions 1-3 must re-pass fresh structural+judge evaluation before Gate
+        # 1 can genuinely fire (and be confirmable) again. Store the amendment note regardless.
+        record.user_amendment = response.amendment
+        return state
+
     if response.confirmed and response.payload_digest == record.payload_digest:
         record.confirmed = True
         record.confirmed_payload_digest = response.payload_digest
         record.user_amendment = response.amendment
+    elif response.amendment is not None:
+        # FIX (2026-08-01): a decline/correction used to be a complete no-op for any gate other than
+        # GATE_2_BOUNDARY -- not even the amendment text got stored. Store it regardless of whether
+        # this response resulted in a fresh confirm, so a correction is never silently discarded.
+        record.user_amendment = response.amendment
     return state
+
+
+def _apply_gate_1_revision(state: InterrogationState, response: GateResponse) -> bool:
+    """Applies Gate 1's "correct" action, if any revision field is present. Returns True iff a
+    revision was applied. Unlike Gate 2's boundary_text, these are not trusted overwrites: resetting
+    the field(s) routes back through evaluate_all's normal structural-then-judge discipline on the
+    next step() call, exactly as a fresh answer to C1/C2/C3 would (verified by tracing
+    checks/conditions.py's dedup-by-exact-value matching -- a changed value can never reuse a stale
+    cached verdict)."""
+    revised = False
+
+    if response.problem_statement_revision is not None:
+        state.problem_statement = response.problem_statement_revision
+        revised = True
+
+    if response.acceptance_criteria_revision is not None:
+        from loopr.models.interrogation import AcceptanceCriterion
+
+        state.acceptance_criteria = [
+            AcceptanceCriterion(text=text) for text in response.acceptance_criteria_revision
+        ]
+        revised = True
+
+    if response.scope_edges_revision is not None:
+        from loopr.models.common import ScopeEdgeKind
+        from loopr.models.interrogation import ScopeEdge
+
+        state.scope_edges = [
+            ScopeEdge(item=text, kind=ScopeEdgeKind.OUT, reason="user-corrected-at-gate-1")
+            for text in response.scope_edges_revision
+        ]
+        revised = True
+
+    return revised
 
 
 def _apply_gate_2(state: InterrogationState, response: GateResponse) -> None:

@@ -132,6 +132,9 @@ def cmd_step(args: argparse.Namespace) -> int:
             boundary_text=raw.get("boundary_text"),
             declined=raw.get("declined", False),
             touched_surface=raw.get("touched_surface"),
+            problem_statement_revision=raw.get("problem_statement_revision"),
+            acceptance_criteria_revision=raw.get("acceptance_criteria_revision"),
+            scope_edges_revision=raw.get("scope_edges_revision"),
         )
         inbound = InboundPayload(kind=InboundKind.GATE, gate_response=gate_response)
 
