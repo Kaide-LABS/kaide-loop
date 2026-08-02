@@ -51,14 +51,13 @@ def test_dropping_only_why_this_must_be_airtight_is_now_rejected() -> None:
     # Resolve every allowlisted placeholder, matching a plausible real customization, so the ONLY
     # structural difference from the template is the dropped section -- not also leftover
     # placeholders, which would fail for an unrelated reason and defeat the point of this test.
-    # [RESEARCH FOCUS] is deliberately NOT resolved here -- it is not on the allowlist (it must
-    # survive byte-identical, like [UNVERIFIED]/[EXECUTOR]; see templates.py's
-    # NON_PLACEHOLDER_BRACKET_TOKENS), so leaving it untouched is what a genuine customization does.
+    # [RESEARCH FOCUS] and [PHASE_COUNT] are deliberately NOT resolved here -- neither is on the
+    # allowlist (both must survive byte-identical, like [UNVERIFIED]/[EXECUTOR]; see templates.py's
+    # NON_PLACEHOLDER_BRACKET_TOKENS), so leaving them untouched is what a genuine customization does.
     for token, value in {
         "[PROJECT_NAME]": "Acme Corp",
         "[PROJECT_REPO_NAME]": "acme-repo",
         "[PRD_FILENAME]": "ULTIMATE_PRD.md",
-        "[PHASE_COUNT]": "4",
     }.items():
         output_text = output_text.replace(token, value)
 

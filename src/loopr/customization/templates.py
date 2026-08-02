@@ -200,36 +200,61 @@ def find_gap_candidates(text: str, detected_sections: list[str]) -> list[str]:
     return candidates
 
 
-# Allowlist of true placeholder tokens per step -- bracket-shaped tokens NOT on this list are left
-# verbatim and reported, never guessed at (SS4.2: "an explicit allowlist, never a regex sweep").
-# [UNVERIFIED], [EXECUTOR], and [RESEARCH FOCUS] deliberately do NOT appear here -- see
-# NON_PLACEHOLDER_BRACKET_TOKENS below for why each is excluded.
+# CLASSIFICATION RULE for these two sets (state this explicitly -- do not make the next person
+# re-derive it from the instances): for a given STEP, is a bracket token's value knowable AT THE
+# MOMENT THAT STEP's template is customized, or is it derived by the agent EXECUTING that customized
+# prompt (from its own future repo scan, its own future output, or emitted as its own in-output tag)?
+# Customizer-knowable now -> STEP<N>_PLACEHOLDER_ALLOWLIST. Runtime-derived or agent-emitted ->
+# NON_PLACEHOLDER_BRACKET_TOKENS. A token's classification is PER-STEP, not global: the same literal
+# token can be customizer-knowable in one step's template and runtime-derived in another's, because
+# "when it becomes knowable" depends on what that step's own execution produces (SS5's two-pass
+# finding). [PHASE_COUNT] is the concrete case -- see its entry below. Two bracket-shape tokens that
+# LOOK like placeholders but never belong on any allowlist, in any step, live in
+# NON_PLACEHOLDER_BRACKET_TOKENS regardless: [UNVERIFIED] (a tag the executing model emits in its own
+# output) and [EXECUTOR] (reject-pattern shorthand, "[EXECUTOR] may have written X -- reject").
+#
+# Bracket-shaped tokens NOT on the relevant allowlist are left verbatim and reported, never guessed
+# at (SS4.2: "an explicit allowlist, never a regex sweep").
+
+# STEP_10: every distinct bracket-shaped token actually present in the real file, verified directly
+# against it (test_step10_bracket_token_classification_is_complete), not assumed from any table.
 STEP10_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset(
     {
         "[PROJECT_NAME]",
         "[PROJECT_REPO_NAME]",
         "[PRD_FILENAME]",
-        "[PHASE_COUNT]",
     }
 )
 
-# [UNVERIFIED]: a tag the executing model is instructed to emit in its own output.
-# [EXECUTOR]: reject-pattern shorthand ("[EXECUTOR] may have written X -- reject").
-# [RESEARCH FOCUS]: a THIRD instance of the same trap, confirmed against real usage rather than
-# assumed -- it reads as a placeholder but is not one. The template (STEP_10 SS1, lines 84-86) binds
-# it to a value the STEP10-EXECUTING agent derives from ITS OWN repo scan at execution time ("From
-# this scan, extract the project's CORE METHODS ... you will feed these into the literature arm of
-# SS2 as the [RESEARCH FOCUS]"; SS2 itself calls it back as "the core methods extracted in SS1") --
-# not a value the customizer can legitimately supply ahead of time. The project's own real precedent
+# [UNVERIFIED]: see the shared rule above.
+#
+# [RESEARCH FOCUS] (STEP_10 only): the template (SS1, lines 84-86) binds it to a value the
+# STEP10-EXECUTING agent derives from ITS OWN repo scan at execution time ("From this scan, extract
+# the project's CORE METHODS ... you will feed these into the literature arm of SS2 as the [RESEARCH
+# FOCUS]"; SS2 itself calls it back as "the core methods extracted in SS1") -- not a value the
+# customizer can legitimately supply ahead of time. Real precedent
 # (prompts/loopr/step10_prd_modernization.md line 88, a human-produced customization) leaves the
-# token in place verbatim and adds elaboration AFTER it, rather than replacing it -- confirming this
-# reading. Previously misclassified as allowlisted (b020ade); every real customization following
-# established practice would have failed structural fidelity for correctly leaving it untouched, or
-# been forced to fabricate a guessed research focus to pass -- exactly the corruption this allowlist
-# exists to prevent. All three match the bracket shape but are not placeholders, and a naive
-# fill-every-bracket implementation would corrupt all three.
+# token in place verbatim and adds elaboration AFTER it, rather than replacing it. Previously
+# misclassified as allowlisted (b020ade).
+#
+# [PHASE_COUNT] (STEP_10 only -- STEP-DEPENDENT, do not generalize this exclusion to step11/step12):
+# appears once, STEP_10 SS5 line 282, inside SS0's phase-plan-header instruction to the
+# STEP10-EXECUTING agent for what it writes INTO PHASE_1_SPEC.md ("Phase 1 of [PHASE_COUNT]") -- the
+# phase count is a product of that agent's own Phase 1 breakdown, unknowable before step10 runs.
+# Real precedent (prompts/loopr/step10_prd_modernization.md line 261) states this explicitly:
+# "PHASE_COUNT is not yet known; determine and state it here based on how you actually break down
+# the build, do not guess a number in advance." Previously misclassified as allowlisted (b020ade),
+# same defect class as [RESEARCH FOCUS]. THIS FLIPS FOR STEP_11/STEP_12 (SS5's two-pass finding, Phase
+# 2 work): by the time those templates are customized, step10 has already executed and
+# PHASE_1_SPEC.md SS0 states the real count, so [PHASE_COUNT] becomes genuinely customizer-knowable
+# there and belongs on THEIR allowlist, not in a step11/12 non-placeholder set. When Phase 2 builds
+# STEP11_PLACEHOLDER_ALLOWLIST / STEP12_PLACEHOLDER_ALLOWLIST, re-derive [PHASE_COUNT]'s
+# classification for each from the rule above -- do not copy this exclusion forward by reflex.
+#
+# All of these match the bracket shape but are not customizer-resolvable placeholders for THIS step,
+# and a naive fill-every-bracket implementation would corrupt all of them.
 NON_PLACEHOLDER_BRACKET_TOKENS: frozenset[str] = frozenset(
-    {"[UNVERIFIED]", "[EXECUTOR]", "[RESEARCH FOCUS]"}
+    {"[UNVERIFIED]", "[EXECUTOR]", "[RESEARCH FOCUS]", "[PHASE_COUNT]"}
 )
 
 _BRACKET_TOKEN_RE = re.compile(r"\[[A-Za-z0-9 _]+\]")

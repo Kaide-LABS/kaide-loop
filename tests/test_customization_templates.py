@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from loopr.customization.templates import (
+    _BRACKET_TOKEN_RE,
     NON_PLACEHOLDER_BRACKET_TOKENS,
     STEP10_PLACEHOLDER_ALLOWLIST,
     TemplateDiscoveryError,
@@ -129,7 +130,7 @@ def test_empty_text_is_vacuous() -> None:
         extract_skeleton("", CustomizationStep.STEP_10)
 
 
-@pytest.mark.parametrize("decoy", ["[UNVERIFIED]", "[EXECUTOR]", "[RESEARCH FOCUS]"])
+@pytest.mark.parametrize("decoy", ["[UNVERIFIED]", "[EXECUTOR]", "[RESEARCH FOCUS]", "[PHASE_COUNT]"])
 def test_decoys_are_never_treated_as_placeholders(decoy: str) -> None:
     assert decoy not in STEP10_PLACEHOLDER_ALLOWLIST
     assert decoy in NON_PLACEHOLDER_BRACKET_TOKENS
@@ -156,6 +157,59 @@ def test_step10_real_file_research_focus_occurrences_are_not_placeholders() -> N
     found = inventory_placeholders(text, CustomizationStep.STEP_10)
     assert "[RESEARCH FOCUS]" not in found
     assert "[RESEARCH FOCUS]" in NON_PLACEHOLDER_BRACKET_TOKENS
+
+
+def test_step10_real_file_phase_count_occurrence_is_not_a_placeholder() -> None:
+    """Regression: [PHASE_COUNT] (SS5 line 282, inside SS0's phase-plan-header instruction) reads
+    like a placeholder but is bound to a value the STEP10-EXECUTING agent derives from its own Phase
+    1 breakdown, not one the customizer can supply -- confirmed against the real precedent
+    (prompts/loopr/step10_prd_modernization.md line 261: "PHASE_COUNT is not yet known; determine and
+    state it here ... do not guess a number in advance"). Same defect class as [RESEARCH FOCUS], and
+    STEP_10-SPECIFIC: [PHASE_COUNT] becomes genuinely customizer-resolvable for step11/step12 once
+    step10 has executed (SS5's two-pass finding) -- do not carry this exclusion forward to Phase 2
+    without re-deriving it for those steps."""
+    text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    assert text.count("[PHASE_COUNT]") == 1
+    found = inventory_placeholders(text, CustomizationStep.STEP_10)
+    assert "[PHASE_COUNT]" not in found
+    assert "[PHASE_COUNT]" in NON_PLACEHOLDER_BRACKET_TOKENS
+
+
+def test_step10_bracket_token_classification_is_complete() -> None:
+    """The load-bearing completeness check: every distinct bracket-shaped token actually present in
+    the real STEP_10 file must be classified by EITHER STEP10_PLACEHOLDER_ALLOWLIST OR
+    NON_PLACEHOLDER_BRACKET_TOKENS -- never neither. A token in neither set is not harmlessly
+    ignored, it is UNCLASSIFIED, and inventory_placeholders would silently treat it as "not a
+    placeholder" without anyone having actually decided that. This is what would have caught both
+    [RESEARCH FOCUS] and [PHASE_COUNT] before they shipped as misclassified in the OTHER direction
+    (wrongly allowlisted) -- this check catches the missing-classification shape of the same defect
+    class, and the two sets being disjoint is asserted as a sanity companion."""
+    text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    found = set(_BRACKET_TOKEN_RE.findall(text))
+    classified = STEP10_PLACEHOLDER_ALLOWLIST | NON_PLACEHOLDER_BRACKET_TOKENS
+    unclassified = found - classified
+    assert unclassified == set(), (
+        f"bracket token(s) found in the real STEP_10 file with no classification in either "
+        f"STEP10_PLACEHOLDER_ALLOWLIST or NON_PLACEHOLDER_BRACKET_TOKENS: {sorted(unclassified)} -- "
+        "classify each per the rule documented in templates.py before this can pass"
+    )
+    assert STEP10_PLACEHOLDER_ALLOWLIST & NON_PLACEHOLDER_BRACKET_TOKENS == set(), (
+        "a token cannot be both customizer-resolvable and runtime-derived for the same step"
+    )
+
+
+def test_completeness_check_fails_when_a_real_token_is_unclassified() -> None:
+    """Demonstrates the completeness check firing for real, not merely existing: reproduce the exact
+    shape of the [RESEARCH FOCUS]/[PHASE_COUNT] miss by removing a real token from BOTH sets and
+    confirming the same set-difference logic test_step10_bracket_token_classification_is_complete
+    uses actually detects it, rather than silently passing on an incomplete classification."""
+    text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    found = set(_BRACKET_TOKEN_RE.findall(text))
+    crippled_classified = (STEP10_PLACEHOLDER_ALLOWLIST | NON_PLACEHOLDER_BRACKET_TOKENS) - {
+        "[PHASE_COUNT]"
+    }
+    unclassified = found - crippled_classified
+    assert unclassified == {"[PHASE_COUNT]"}
 
 
 def test_surviving_customize_marker_detected() -> None:
