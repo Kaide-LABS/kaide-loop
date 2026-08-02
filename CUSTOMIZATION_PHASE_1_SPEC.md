@@ -221,10 +221,36 @@ tolerated. This is convention-independent, so it does not inherit the blind spot
 it is checking.
 
 **Doc-title handling must be a declared decision, not a regex accident.** `STEP_10` line 1
-(`STEP 10 -- PRD MODERNIZATION + …`) is currently excluded only because `+` happens to fall outside
-the character class. Decide explicitly whether the document title is part of the skeleton — the
-recommendation is to exclude it in all three templates (a title is not a section), but state it and
-implement it deliberately in each convention.
+(`STEP 10 -- PRD MODERNIZATION + …`) must not be excluded merely because `+` happens to fall outside
+the character class — that would leave the exclusion accidentally masking an untested mechanism.
+**[VERIFIED 2026-08-02]** The implementation excludes line 1 unconditionally (`index > 0` in
+`extract_skeleton`, independent of whether the line would otherwise match the section pattern), so
+the exclusion holds on its own declared merits, not on the `+` accident. Decide explicitly whether
+the document title is part of the skeleton — the recommendation is to exclude it in all three
+templates (a title is not a section), and it is implemented deliberately in each convention.
+
+**Over-capture is a known, accepted tradeoff — decided, not left open. [DECIDED 2026-08-02]** The
+all-caps detector treats a standalone all-caps line with a trailing lowercase parenthetical as a
+section header (this is precisely the fix for the missing-ninth-section defect above). This can
+false-positive on customizer-generated output: `STEP_10` §3's `[PROJECT HARD BOUNDARY -- fill per
+project: …]` block is free text, not an allowlisted placeholder, and a customizer could plausibly
+emit a standalone line such as `ANTI-REPLICATION BOUNDARY (customer IP)` while filling it — which
+would register as a section the template doesn't have, and HALT the fidelity check on a false
+structural mismatch.
+
+Two fixes were considered and rejected: (1) tightening the all-caps pattern (e.g. requiring
+blank-line isolation on both sides) does not work for this template specifically — `STEP_10` is
+written in a loose one-sentence-per-paragraph style where nearly every line, header or body prose, is
+blank-line-isolated, so isolation does not distinguish the two cases here; (2) any tightening broadly
+risks reintroducing the original, strictly worse defect (a missed real section silently passing).
+**Decision: accept the false-positive risk and document it, rather than tighten the pattern.** The
+asymmetry is deliberate and matches SS4.3's own stated priority: a false HALT costs a retry (the
+fidelity detail message names exactly which line was treated as an unexpected section, and the
+customizer can be asked to fold the boundary text into existing prose instead of a standalone
+all-caps line); a false PASS costs silent corruption of the artifact everything downstream trusts.
+Between an occasional false HALT and any reintroduced risk of a false PASS, the false HALT is
+strictly cheaper. Not implemented in code — this is a documented risk acceptance, not a defect to
+patch.
 
 Two consequences, both load-bearing:
 

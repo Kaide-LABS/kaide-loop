@@ -129,7 +129,7 @@ def test_empty_text_is_vacuous() -> None:
         extract_skeleton("", CustomizationStep.STEP_10)
 
 
-@pytest.mark.parametrize("decoy", ["[UNVERIFIED]", "[EXECUTOR]"])
+@pytest.mark.parametrize("decoy", ["[UNVERIFIED]", "[EXECUTOR]", "[RESEARCH FOCUS]"])
 def test_decoys_are_never_treated_as_placeholders(decoy: str) -> None:
     assert decoy not in STEP10_PLACEHOLDER_ALLOWLIST
     assert decoy in NON_PLACEHOLDER_BRACKET_TOKENS
@@ -144,6 +144,18 @@ def test_step10_real_file_unverified_occurrences_are_not_placeholders() -> None:
     assert text.count("[UNVERIFIED]") == 3
     found = inventory_placeholders(text, CustomizationStep.STEP_10)
     assert "[UNVERIFIED]" not in found
+
+
+def test_step10_real_file_research_focus_occurrences_are_not_placeholders() -> None:
+    """Regression: [RESEARCH FOCUS] (SS1, lines 84-86) reads like a placeholder but is bound to a
+    value the STEP10-EXECUTING agent derives from its own repo scan, not one the customizer can
+    supply -- confirmed against the real precedent in prompts/loopr/step10_prd_modernization.md,
+    which leaves it untouched. It must never be treated as resolvable, like [UNVERIFIED]/[EXECUTOR]."""
+    text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    assert text.count("[RESEARCH FOCUS]") == 3
+    found = inventory_placeholders(text, CustomizationStep.STEP_10)
+    assert "[RESEARCH FOCUS]" not in found
+    assert "[RESEARCH FOCUS]" in NON_PLACEHOLDER_BRACKET_TOKENS
 
 
 def test_surviving_customize_marker_detected() -> None:

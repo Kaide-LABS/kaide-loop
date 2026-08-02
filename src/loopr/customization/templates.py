@@ -83,7 +83,14 @@ def _all_caps_core(stripped: str) -> str:
     AIRTIGHT (loop context)") -- the earlier implementation required the ENTIRE line to be
     uppercase, which silently dropped that section (CUSTOMIZATION_PHASE_1_SPEC.md SS4.3, corrected
     2026-08-01). Only the part OUTSIDE the parenthetical must be all-caps; the qualifier itself may
-    be anything."""
+    be anything.
+
+    This permissiveness is a DECIDED tradeoff (CUSTOMIZATION_PHASE_1_SPEC.md SS4.3, decided
+    2026-08-02), not an oversight: it can false-positive on customizer-drafted output (e.g. a filled
+    HARD BOUNDARY line), causing a spurious structural HALT. Do not tighten this to chase that case --
+    it risks reintroducing THIS defect (a missed real section = a silent false PASS), which is
+    strictly worse than an occasional false HALT a human can retry. See the spec for the full
+    reasoning before changing this regex."""
     match = _TRAILING_PAREN_RE.match(stripped)
     return match.group(1).strip() if match else stripped
 
@@ -195,21 +202,35 @@ def find_gap_candidates(text: str, detected_sections: list[str]) -> list[str]:
 
 # Allowlist of true placeholder tokens per step -- bracket-shaped tokens NOT on this list are left
 # verbatim and reported, never guessed at (SS4.2: "an explicit allowlist, never a regex sweep").
-# [UNVERIFIED] and [EXECUTOR] deliberately do NOT appear here: the first is a tag the executing
-# model is instructed to emit in its own output, the second is reject-pattern shorthand -- both
-# match the bracket shape but are not placeholders, and a naive fill-every-bracket implementation
-# would corrupt both.
+# [UNVERIFIED], [EXECUTOR], and [RESEARCH FOCUS] deliberately do NOT appear here -- see
+# NON_PLACEHOLDER_BRACKET_TOKENS below for why each is excluded.
 STEP10_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset(
     {
         "[PROJECT_NAME]",
         "[PROJECT_REPO_NAME]",
         "[PRD_FILENAME]",
         "[PHASE_COUNT]",
-        "[RESEARCH FOCUS]",
     }
 )
 
-NON_PLACEHOLDER_BRACKET_TOKENS: frozenset[str] = frozenset({"[UNVERIFIED]", "[EXECUTOR]"})
+# [UNVERIFIED]: a tag the executing model is instructed to emit in its own output.
+# [EXECUTOR]: reject-pattern shorthand ("[EXECUTOR] may have written X -- reject").
+# [RESEARCH FOCUS]: a THIRD instance of the same trap, confirmed against real usage rather than
+# assumed -- it reads as a placeholder but is not one. The template (STEP_10 SS1, lines 84-86) binds
+# it to a value the STEP10-EXECUTING agent derives from ITS OWN repo scan at execution time ("From
+# this scan, extract the project's CORE METHODS ... you will feed these into the literature arm of
+# SS2 as the [RESEARCH FOCUS]"; SS2 itself calls it back as "the core methods extracted in SS1") --
+# not a value the customizer can legitimately supply ahead of time. The project's own real precedent
+# (prompts/loopr/step10_prd_modernization.md line 88, a human-produced customization) leaves the
+# token in place verbatim and adds elaboration AFTER it, rather than replacing it -- confirming this
+# reading. Previously misclassified as allowlisted (b020ade); every real customization following
+# established practice would have failed structural fidelity for correctly leaving it untouched, or
+# been forced to fabricate a guessed research focus to pass -- exactly the corruption this allowlist
+# exists to prevent. All three match the bracket shape but are not placeholders, and a naive
+# fill-every-bracket implementation would corrupt all three.
+NON_PLACEHOLDER_BRACKET_TOKENS: frozenset[str] = frozenset(
+    {"[UNVERIFIED]", "[EXECUTOR]", "[RESEARCH FOCUS]"}
+)
 
 _BRACKET_TOKEN_RE = re.compile(r"\[[A-Za-z0-9 _]+\]")
 
