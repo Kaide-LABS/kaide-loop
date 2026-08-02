@@ -24,7 +24,7 @@ from loopr.customization.customize import (
     build_fidelity_judge_request,
 )
 from loopr.customization.fidelity import apply_judge_layer, check_fidelity
-from loopr.customization.templates import discover_template, extract_skeleton
+from loopr.customization.templates import discover_template, extract_skeleton, find_gap_candidates
 from loopr.errors import LooprError
 from loopr.gates.gates import GateResponse
 from loopr.interrogation.loop import InboundKind, InboundPayload, step
@@ -320,6 +320,19 @@ def cmd_customize(args: argparse.Namespace) -> int:
         template_path = discover_template(repo_root, CustomizationStep.STEP_10)
         template_text = template_path.read_text(encoding="utf-8")
         skeleton = extract_skeleton(template_text, CustomizationStep.STEP_10)
+        # Structural cross-check (CUSTOMIZATION_PHASE_1_SPEC.md SS4.3, corrected 2026-08-01): the
+        # gap analysis is convention-independent, so it does not share extract_skeleton's own blind
+        # spot -- reported here so a mismatch is visible, not silently tolerated. It is advisory,
+        # not a hard failure: it deliberately over-reports (e.g. colon-terminated sub-labels the
+        # all_caps convention correctly treats as non-sections still get flagged here), by design.
+        gap_candidates = find_gap_candidates(template_text, skeleton.sections)
+        if gap_candidates:
+            print(
+                f"NOTE: gap analysis found {len(gap_candidates)} heading-shaped line(s) not in the "
+                f"extracted skeleton -- review whether any of these is a missed section: "
+                f"{gap_candidates}",
+                file=sys.stderr,
+            )
         state.customization = CustomizationState(
             step10_template_path=str(template_path), step10_skeleton=skeleton
         )

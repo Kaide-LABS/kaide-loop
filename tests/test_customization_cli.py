@@ -17,28 +17,37 @@ from loopr.models.common import Verdict
 from loopr.models.judge import JudgeResponse
 from loopr.state.store import StateStore
 
+# Every fixture carries a dummy title line first, matching real STEP_10's own shape -- extract_
+# skeleton always excludes line 1 as the declared title exclusion (CUSTOMIZATION_PHASE_1_SPEC.md
+# SS4.3), so a fixture without one would silently lose its own first real section to that rule.
+_TITLE = "DOC TITLE (TEMPLATE)\n\n"
+
 _STEP10_TEMPLATE = (
-    "ROLE\n\nAct as an architect for [PROJECT_NAME].\n\n"
-    "1. FIRST SECTION\n\nDo the first thing for [PROJECT_REPO_NAME].\n\n"
-    "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
+    _TITLE
+    + "ROLE\n\nAct as an architect for [PROJECT_NAME].\n\n"
+    + "1. FIRST SECTION\n\nDo the first thing for [PROJECT_REPO_NAME].\n\n"
+    + "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
 )
 
 _GOOD_CUSTOMIZATION = (
-    "ROLE\n\nAct as an architect for Acme Corp.\n\n"
-    "1. FIRST SECTION\n\nDo the first thing for acme-repo.\n\n"
-    "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
+    _TITLE
+    + "ROLE\n\nAct as an architect for Acme Corp.\n\n"
+    + "1. FIRST SECTION\n\nDo the first thing for acme-repo.\n\n"
+    + "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
 )
 
 _RESTRUCTURED_CUSTOMIZATION = (
-    "ROLE\n\nAct as an architect for Acme Corp.\n\n"
-    "1. FIRST SECTION\n\nDo the first thing for acme-repo.\n\n"
+    _TITLE
+    + "ROLE\n\nAct as an architect for Acme Corp.\n\n"
+    + "1. FIRST SECTION\n\nDo the first thing for acme-repo.\n\n"
     # section 2 dropped
 )
 
 _PLACEHOLDER_DELETION_ONLY = (
-    "ROLE\n\nAct as an architect for the project.\n\n"
-    "1. FIRST SECTION\n\nDo the first thing for the repo.\n\n"
-    "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
+    _TITLE
+    + "ROLE\n\nAct as an architect for the project.\n\n"
+    + "1. FIRST SECTION\n\nDo the first thing for the repo.\n\n"
+    + "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
 )
 
 

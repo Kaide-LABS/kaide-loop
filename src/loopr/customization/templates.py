@@ -45,7 +45,8 @@ class VacuousSkeletonError(LooprError):
 _MIN_PLAUSIBLE_SECTIONS = 2
 
 _NUMBERED_HEADER_RE = re.compile(r"^\d+\.\s+[A-Z]{2,}\b")
-_ALL_CAPS_HEADER_RE = re.compile(r"^[A-Z0-9][A-Z0-9 &/\-(),']*[A-Z0-9)]$")
+_TRAILING_PAREN_RE = re.compile(r"^(.*?)\s*(\([^)]*\))$")
+_ALL_CAPS_CORE_RE = re.compile(r"^[A-Z0-9][A-Z0-9 &/,'-]*[A-Z0-9]$")
 _MARKDOWN_H2_RE = re.compile(r"^##\s+\S")
 _MARKDOWN_H2_H3_RE = re.compile(r"^#{2,3}\s+\S")
 
@@ -76,6 +77,17 @@ def discover_template(repo_root: Path, step: CustomizationStep) -> Path:
     return matches[0]
 
 
+def _all_caps_core(stripped: str) -> str:
+    """Strips one trailing parenthetical, if present, and returns what remains. A genuine STEP_10
+    section header may carry a lowercase-content parenthetical qualifier (e.g. "WHY THIS MUST BE
+    AIRTIGHT (loop context)") -- the earlier implementation required the ENTIRE line to be
+    uppercase, which silently dropped that section (CUSTOMIZATION_PHASE_1_SPEC.md SS4.3, corrected
+    2026-08-01). Only the part OUTSIDE the parenthetical must be all-caps; the qualifier itself may
+    be anything."""
+    match = _TRAILING_PAREN_RE.match(stripped)
+    return match.group(1).strip() if match else stripped
+
+
 def _is_all_caps_section(line: str) -> bool:
     stripped = line.strip()
     if not stripped:
@@ -84,19 +96,32 @@ def _is_all_caps_section(line: str) -> bool:
         return True
     if stripped.endswith(":"):
         return False
-    return bool(_ALL_CAPS_HEADER_RE.match(stripped))
+    core = _all_caps_core(stripped)
+    if not core:
+        return False
+    return bool(_ALL_CAPS_CORE_RE.match(core))
 
 
 def extract_skeleton(text: str, step: CustomizationStep) -> TemplateSkeleton:
     """Extracts the ordered section-header list under whichever convention applies to this step,
     declared explicitly per template (SS4.3) -- never one generic regex. STEP_10 has zero markdown
     headers at all (a markdown-header extractor finds literally nothing in it); STEP_11 uses `##`;
-    STEP_12 uses `##` and `###`. Raises VacuousSkeletonError if the result is implausibly short."""
+    STEP_12 uses `##` and `###`. Raises VacuousSkeletonError if the result is implausibly short.
+
+    Doc-title handling is a DECLARED decision (SS4.3), not incidental regex behavior: the document
+    title is excluded from the skeleton in all three conventions. For STEP_11/STEP_12 this falls out
+    of the convention itself (the title is a markdown H1, `#`, and only `##`/`###` are matched --
+    nothing special needed). STEP_10 has no markdown at all, so its title line is plain text in the
+    same visual register as a real section -- it is excluded explicitly, by always skipping line 1,
+    regardless of whether it happens to match the section pattern.
+    """
     lines = text.splitlines()
 
     if step == CustomizationStep.STEP_10:
         convention = "all_caps"
-        sections = [line.strip() for line in lines if _is_all_caps_section(line)]
+        sections = [
+            line.strip() for index, line in enumerate(lines) if index > 0 and _is_all_caps_section(line)
+        ]
     elif step == CustomizationStep.STEP_11:
         convention = "markdown_h2"
         sections = [line.strip() for line in lines if _MARKDOWN_H2_RE.match(line.strip())]
@@ -112,6 +137,60 @@ def extract_skeleton(text: str, step: CustomizationStep) -> TemplateSkeleton:
         )
 
     return TemplateSkeleton(convention=convention, sections=sections)
+
+
+def _looks_heading_shaped(line: str) -> bool:
+    """A GENERIC, convention-independent heuristic -- deliberately not sharing any code or regex
+    with `_is_all_caps_section`/the markdown patterns above, per SS4.3's requirement that the gap
+    checker "does not inherit the blind spot of whichever regex it is checking." Unindented, short,
+    not sentence-ending punctuation, and majority-uppercase (allowing a lowercase parenthetical
+    qualifier, unlike ordinary prose which is majority lowercase)."""
+    stripped = line.strip()
+    if not stripped or stripped != line:
+        return False
+    if len(stripped) > 100:
+        return False
+    if stripped[-1] in ".,;":
+        return False
+    letters = [c for c in stripped if c.isalpha()]
+    if not letters:
+        return False
+    upper_ratio = sum(c.isupper() for c in letters) / len(letters)
+    return upper_ratio >= 0.6
+
+
+def find_gap_candidates(text: str, detected_sections: list[str]) -> list[str]:
+    """Structural cross-check, required by SS4.3: scans every line NOT already claimed by
+    `detected_sections` for something that structurally looks like a missed header -- isolated by
+    blank lines on both sides, and heading-shaped per `_looks_heading_shaped`. A minimum-count floor
+    (VacuousSkeletonError) only catches TOTAL extraction failure; this catches PARTIAL failure, the
+    exact case that let 8-of-9 sections in STEP_10 pass unnoticed. Line 1 (the document title) is
+    excluded here too, consistent with the same declared title-exclusion decision `extract_skeleton`
+    applies -- otherwise the title would be reported as a permanent, meaningless false positive on
+    every scan. Returns every suspected-missed candidate; the caller decides how to act on it."""
+    lines = text.splitlines()
+
+    located: set[int] = set()
+    search_start = 0
+    for section in detected_sections:
+        for index in range(search_start, len(lines)):
+            if lines[index].strip() == section:
+                located.add(index)
+                search_start = index + 1
+                break
+
+    candidates = []
+    for index, line in enumerate(lines):
+        if index == 0 or index in located:
+            continue
+        stripped = line.strip()
+        if not stripped:
+            continue
+        prev_blank = index == 0 or lines[index - 1].strip() == ""
+        next_blank = index == len(lines) - 1 or lines[index + 1].strip() == ""
+        if prev_blank and next_blank and _looks_heading_shaped(line):
+            candidates.append(stripped)
+    return candidates
 
 
 # Allowlist of true placeholder tokens per step -- bracket-shaped tokens NOT on this list are left

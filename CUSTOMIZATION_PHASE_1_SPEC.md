@@ -193,9 +193,38 @@ this is the single biggest implementation trap in Phase 1:**
 
 | Template | Convention | Sections |
 |---|---|---|
-| `STEP_10` | **No markdown headers at all** (`grep -c '^#'` → 0). ALL-CAPS lines (`ROLE`, `DELIVERABLES (…)`) plus numbered ALL-CAPS sections (`1. CONTEXTUALIZE …`) | 2 + 6 |
+| `STEP_10` | **No markdown headers at all** (`grep -c '^#'` → 0). Unnumbered heading lines (`ROLE`, `DELIVERABLES (…)`, `WHY THIS MUST BE AIRTIGHT (loop context)`) plus numbered sections (`1. CONTEXTUALIZE …`) | **3 + 6 = 9** |
 | `STEP _11` | markdown `##` | 9 |
 | `step_12` | markdown `##` + `###` | 11 + 6 |
+
+**[CORRECTED 2026-08-01 — this table previously said "2 + 6" for `STEP_10`, and that error shipped
+into the first implementation.]** The missing ninth section is `WHY THIS MUST BE AIRTIGHT (loop
+context)` at line 52. It is **not** all-caps — it ends in a lowercase parenthetical — so any
+character class built for ALL-CAPS headers silently drops it, and the fidelity check then cannot
+detect that section being dropped, reordered, or mangled by a customizer. The original wrong count
+came from a grep whose regex carried the same lowercase blind spot, which is exactly why the
+verification rule below exists.
+
+**Verification rule, mandatory: the template file is the oracle, never this table.** Confirming that
+extraction "matches the spec's stated count" is not verification — if the spec is wrong, that check
+passes green on a real defect, which is precisely what happened here. Assert against the file
+itself, and cross-check with the gap analysis below. Treat the counts in this table as a sanity
+reference that has already been wrong once, not as ground truth.
+
+**Structural cross-check — gap analysis (required, and it is what catches the partial-extraction
+case a count floor cannot).** A minimum-count floor detects total extraction failure (0 sections) but
+not partial failure — 8 of 9 sailed through a floor of 2 unnoticed. After extracting, scan the
+regions *between* consecutive detected sections for lines that structurally look like headers but
+were not captured: unindented, short, followed by a blank line, not sentence-cased body prose, not a
+list item. Any such candidate is a suspected missed section and must be reported, not silently
+tolerated. This is convention-independent, so it does not inherit the blind spot of whichever regex
+it is checking.
+
+**Doc-title handling must be a declared decision, not a regex accident.** `STEP_10` line 1
+(`STEP 10 -- PRD MODERNIZATION + …`) is currently excluded only because `+` happens to fall outside
+the character class. Decide explicitly whether the document title is part of the skeleton — the
+recommendation is to exclude it in all three templates (a title is not a section), but state it and
+implement it deliberately in each convention.
 
 Two consequences, both load-bearing:
 

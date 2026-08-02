@@ -18,6 +18,7 @@ from loopr.customization.templates import (
     VacuousSkeletonError,
     discover_template,
     extract_skeleton,
+    find_gap_candidates,
     inventory_placeholders,
     surviving_customize_markers,
 )
@@ -33,11 +34,60 @@ def test_step10_has_zero_markdown_headers() -> None:
     assert header_lines == []
 
 
-def test_step10_skeleton_extraction_finds_all_caps_sections() -> None:
+def test_why_this_must_be_airtight_is_present_in_the_extracted_skeleton() -> None:
+    """Regression for the confirmed defect: this section (line 52) was silently dropped because it
+    ends in a lowercase parenthetical qualifier and the old character class required the ENTIRE
+    line to be uppercase. Asserted directly against the real file, not against a stated count."""
+    text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    skeleton = extract_skeleton(text, CustomizationStep.STEP_10)
+    assert "WHY THIS MUST BE AIRTIGHT (loop context)" in skeleton.sections
+
+
+def test_step10_skeleton_is_exactly_nine_sections_with_title_declared_excluded() -> None:
+    """The corrected count (CUSTOMIZATION_PHASE_1_SPEC.md SS4.3, 2026-08-01): 9, not 8 -- and the
+    document title (line 1) is excluded by a DECLARED rule (always skip line 1), not by an
+    incidental regex gap. Cross-checked independently with gap analysis below, per SS4.3's
+    verification rule: the file is the oracle, and a second, convention-independent mechanism must
+    agree, rather than trusting this one extractor's count on its own."""
     text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
     skeleton = extract_skeleton(text, CustomizationStep.STEP_10)
     assert skeleton.convention == "all_caps"
     assert skeleton.sections == [
+        "ROLE",
+        "DELIVERABLES (TWO -- BOTH REQUIRED, NEITHER OPTIONAL)",
+        "WHY THIS MUST BE AIRTIGHT (loop context)",
+        "1. CONTEXTUALIZE (REPO SCAN -- LOCAL TOOLS)",
+        "2. RESEARCH & GROUNDING (EXTERNAL DEPENDENCY ADD-ON)",
+        "3. UNIVERSAL INVARIANTS (bake into BOTH the modernised PRD and the Phase 1 spec)",
+        "4. DELIVERABLE A -- MODERNISE & ENHANCE THE PRD",
+        "5. DELIVERABLE B -- PHASE_1_SPEC.md (BUILT FROM THE MODERNISED PRD)",
+        "6. HANDOFF",
+    ]
+    assert len(skeleton.sections) == 9
+
+    # Independent cross-check (FIX 3): gap analysis, built without sharing _is_all_caps_section's
+    # regex, must find nothing suspicious left over except the three ALREADY-REVIEWED, genuinely
+    # benign colon-terminated sub-labels (not real sections in this convention) -- named explicitly
+    # here so a NEW, unreviewed candidate appearing later fails this assertion loudly.
+    reviewed_benign_sub_labels = {
+        "DOCUMENTATION & CODEBASE -- /Nia:",
+        "WEB SEARCH:",
+        "HALT CONDITIONS:",
+    }
+    gap_candidates = set(find_gap_candidates(text, skeleton.sections))
+    assert gap_candidates == reviewed_benign_sub_labels, (
+        f"unexpected gap-analysis candidates: {gap_candidates - reviewed_benign_sub_labels} -- "
+        "review whether any of these is a genuinely missed section before adding it to the "
+        "reviewed-benign set"
+    )
+
+
+def test_gap_analysis_flags_a_crippled_extractors_miss() -> None:
+    """Demonstrates the checker firing for real: take the real template, extract with the OLD,
+    pre-fix 8-section list (simulating the crippled all-caps-only convention this defect shipped
+    with), and confirm gap analysis reports exactly the section that extraction dropped."""
+    text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    crippled_sections = [
         "ROLE",
         "DELIVERABLES (TWO -- BOTH REQUIRED, NEITHER OPTIONAL)",
         "1. CONTEXTUALIZE (REPO SCAN -- LOCAL TOOLS)",
@@ -47,6 +97,8 @@ def test_step10_skeleton_extraction_finds_all_caps_sections() -> None:
         "5. DELIVERABLE B -- PHASE_1_SPEC.md (BUILT FROM THE MODERNISED PRD)",
         "6. HANDOFF",
     ]
+    candidates = find_gap_candidates(text, crippled_sections)
+    assert "WHY THIS MUST BE AIRTIGHT (loop context)" in candidates
 
 
 @pytest.mark.parametrize(

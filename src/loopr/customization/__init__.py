@@ -9,6 +9,7 @@ from loopr.customization.templates import (
     VacuousSkeletonError,
     discover_template,
     extract_skeleton,
+    find_gap_candidates,
     inventory_placeholders,
 )
 
@@ -20,5 +21,6 @@ __all__ = [
     "check_fidelity",
     "discover_template",
     "extract_skeleton",
+    "find_gap_candidates",
     "inventory_placeholders",
 ]
