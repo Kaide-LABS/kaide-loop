@@ -1,0 +1,1805 @@
+{
+  "acceptance_criteria": [
+    {
+      "judge_confirmed_testable": true,
+      "text": "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+    }
+  ],
+  "assumptions": [],
+  "boundary": {
+    "confirmed": true,
+    "confirmed_hash": "3dfd89e8fbb14b0e5adddc3a04ea86895f718e47ad120f379fb42c4228161ac7",
+    "declined": false,
+    "text": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion."
+  },
+  "brownfield": {
+    "classifications": [
+      {
+        "pattern_id": "decorator:model_validator",
+        "reason": "Recurring (6 occurrences, above the threshold), actively maintained (touched today, in the same commit as the boundary-proposal fix), no deprecation markers, single-author/100%-commit-share is the expected baseline for this solo-founder repo rather than a cruft signal. This is Pydantic's own standard validator decorator, already used throughout the codebase for exactly this shape of work (check_mode_coherent, check_scope, check_response_shape). Does not conflict with the stated intent -- any new validation logic this build's models need should follow the same pattern, not invent an alternative.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "decorator:pytest.fixture",
+        "reason": "pytest.fixture is a standard, universally-recognized Python testing convention, not an obscure or project-specific one -- the 'weak evidence of intentionality' qualifier reflects the occurrence count sitting exactly at the recurrence threshold, not genuine doubt about whether this pattern is legitimate. Actively maintained (touched 4 days ago), no deprecation markers, doesn't conflict with the build's intent. Any new test fixtures this build adds should use the same decorator, consistent with the existing suite.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "decorator:pytest.mark.parametrize",
+        "reason": "pytest.mark.parametrize is a standard, canonical pytest convention for parametrized test cases -- not obscure or project-specific. The 'weak evidence of intentionality' qualifier reflects the occurrence count sitting at the recurrence threshold, not doubt about the pattern's legitimacy. Actively maintained (4 days ago), no deprecation markers, no conflict with the build's intent. New parametrized tests this build adds should follow the same convention.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:__future__",
+        "reason": "This is not just an observed pattern but an explicitly mandated stack convention -- loopr-MIGRATION.md SS8's forward-reference discipline requires it. Recurring across 12 locations, core centrality, actively maintained (touched today), no deprecation markers. Any new modules this build adds must include it, matching the rest of the codebase.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:json",
+        "reason": "Standard library import, core centrality, actively maintained, no deprecation markers, no conflict with the build's intent. Nothing to avoid here -- any new code needing JSON handling should use it the same way.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr",
+        "reason": "Importing loopr's own package is exactly what a thin orchestration wrapper and its tests are supposed to do -- core centrality, actively maintained, no deprecation markers, no conflict with the build's intent.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.gates.gates",
+        "reason": "Standard internal module import, actively maintained, no deprecation markers. Occurrence count at threshold reflects import-site count, not doubt about legitimacy -- importing gates.gates where gate logic is needed is expected, not cruft.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.judge.envelope",
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Expected wherever the judge envelope format is needed.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.models.brownfield",
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Expected wherever brownfield models are needed.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.models.common",
+        "reason": "Standard internal module import, high recurrence (12), core centrality, actively maintained, no deprecation markers. Shared common types are expected to be widely imported.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.models.gates",
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Threshold-level occurrence count reflects import-site count, not doubt about legitimacy.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.models.interrogation",
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Interrogation-state types are expected to be widely imported.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.models.judge",
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Judge envelope types are expected to be widely imported.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:loopr.state.store",
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Threshold-level occurrence count reflects import-site count, not doubt about legitimacy.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:pathlib",
+        "reason": "Standard library import, core centrality, actively maintained, no deprecation markers, no ambiguity.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:pydantic",
+        "reason": "Pydantic is loopr's one mandated runtime dependency (loopr-MIGRATION.md SS8), core centrality, actively maintained, no deprecation markers. Unambiguous.",
+        "verdict": "conform"
+      },
+      {
+        "pattern_id": "import:subprocess",
+        "reason": "Standard library import, core centrality, actively maintained, no deprecation markers. Plausibly how the wrapper invokes the loopr CLI as an external process -- consistent with this build's own confirmed shape (a thin orchestration layer driving the existing CLI contract, not reimplementing it in-process).",
+        "verdict": "conform"
+      }
+    ],
+    "gate_3_confirmed": false,
+    "pattern_candidates": [
+      {
+        "centrality": "peripheral",
+        "deprecation_markers": [],
+        "description": "decorator 'model_validator' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/models/interrogation.py:126",
+          "src/loopr/models/interrogation.py:37",
+          "src/loopr/models/interrogation.py:60",
+          "src/loopr/models/interrogation.py:85",
+          "src/loopr/models/judge.py:132",
+          "src/loopr/models/judge.py:98"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 6,
+        "pattern_id": "decorator:model_validator",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "peripheral",
+        "deprecation_markers": [],
+        "description": "decorator 'pytest.fixture' recurring across the touched surface",
+        "git_last_touched_days_ago": 4,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "tests/conftest.py:14",
+          "tests/conftest.py:24",
+          "tests/conftest.py:29"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 3,
+        "pattern_id": "decorator:pytest.fixture",
+        "signal_qualifiers": [
+          "at the minimum recurrence threshold; weak evidence of intentionality"
+        ]
+      },
+      {
+        "centrality": "peripheral",
+        "deprecation_markers": [],
+        "description": "decorator 'pytest.mark.parametrize' recurring across the touched surface",
+        "git_last_touched_days_ago": 4,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "tests/test_judge_scope.py:16",
+          "tests/test_judge_scope.py:32",
+          "tests/test_judge_scope.py:47"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 3,
+        "pattern_id": "decorator:pytest.mark.parametrize",
+        "signal_qualifiers": [
+          "at the minimum recurrence threshold; weak evidence of intentionality"
+        ]
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import '__future__' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          ".claude/skills/loopr/scripts/loopr_wrapper.py:11",
+          "src/loopr/artifacts/baby_prd.py:7",
+          "src/loopr/cli.py:8",
+          "src/loopr/gates/gates.py:10",
+          "src/loopr/interrogation/loop.py:10",
+          "src/loopr/judge/agent_client.py:8",
+          "src/loopr/models/interrogation.py:3",
+          "src/loopr/models/judge.py:7",
+          "tests/conftest.py:3",
+          "tests/test_cli.py:5",
+          "tests/test_judge_response_dispatch.py:12",
+          "tests/test_judge_scope.py:3"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 12,
+        "pattern_id": "import:__future__",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'json' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          ".claude/skills/loopr/scripts/loopr_wrapper.py:13",
+          "src/loopr/cli.py:11",
+          "tests/test_cli.py:7",
+          "tests/test_judge_response_dispatch.py:14"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 4,
+        "pattern_id": "import:json",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          ".claude/skills/loopr/scripts/loopr_wrapper.py:27",
+          "src/loopr/cli.py:16",
+          "src/loopr/interrogation/loop.py:16",
+          "tests/test_cli.py:10",
+          "tests/test_judge_response_dispatch.py:18"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 5,
+        "pattern_id": "import:loopr",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "peripheral",
+        "deprecation_markers": [],
+        "description": "import 'loopr.gates.gates' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/cli.py:21",
+          "src/loopr/interrogation/loop.py:245",
+          "src/loopr/interrogation/loop.py:26"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 3,
+        "pattern_id": "import:loopr.gates.gates",
+        "signal_qualifiers": [
+          "at the minimum recurrence threshold; weak evidence of intentionality"
+        ]
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.judge.envelope' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/cli.py:23",
+          "src/loopr/cli.py:56",
+          "src/loopr/gates/gates.py:14",
+          "src/loopr/interrogation/loop.py:36",
+          "src/loopr/judge/agent_client.py:12"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 5,
+        "pattern_id": "import:loopr.judge.envelope",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.models.brownfield' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/cli.py:96",
+          "src/loopr/interrogation/loop.py:38",
+          "src/loopr/models/interrogation.py:134",
+          "tests/conftest.py:31"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 4,
+        "pattern_id": "import:loopr.models.brownfield",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.models.common' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/cli.py:24",
+          "src/loopr/gates/gates.py:15",
+          "src/loopr/interrogation/loop.py:133",
+          "src/loopr/interrogation/loop.py:360",
+          "src/loopr/interrogation/loop.py:375",
+          "src/loopr/interrogation/loop.py:39",
+          "src/loopr/models/interrogation.py:7",
+          "src/loopr/models/judge.py:13",
+          "tests/conftest.py:10",
+          "tests/test_cli.py:12",
+          "tests/test_judge_response_dispatch.py:20",
+          "tests/test_judge_scope.py:12"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 12,
+        "pattern_id": "import:loopr.models.common",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.models.gates' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/gates/gates.py:16",
+          "src/loopr/interrogation/loop.py:40",
+          "src/loopr/models/interrogation.py:17"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 3,
+        "pattern_id": "import:loopr.models.gates",
+        "signal_qualifiers": [
+          "at the minimum recurrence threshold; weak evidence of intentionality"
+        ]
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.models.interrogation' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/artifacts/baby_prd.py:9",
+          "src/loopr/cli.py:25",
+          "src/loopr/gates/gates.py:17",
+          "src/loopr/interrogation/loop.py:108",
+          "src/loopr/interrogation/loop.py:361",
+          "src/loopr/interrogation/loop.py:41",
+          "tests/conftest.py:11"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 7,
+        "pattern_id": "import:loopr.models.interrogation",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.models.judge' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/cli.py:26",
+          "src/loopr/gates/gates.py:18",
+          "src/loopr/interrogation/loop.py:42",
+          "src/loopr/judge/agent_client.py:13",
+          "src/loopr/models/interrogation.py:135",
+          "tests/test_cli.py:13",
+          "tests/test_judge_response_dispatch.py:21",
+          "tests/test_judge_scope.py:13"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 8,
+        "pattern_id": "import:loopr.models.judge",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'loopr.state.store' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/cli.py:27",
+          "tests/test_cli.py:14",
+          "tests/test_judge_response_dispatch.py:22"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 3,
+        "pattern_id": "import:loopr.state.store",
+        "signal_qualifiers": [
+          "at the minimum recurrence threshold; weak evidence of intentionality"
+        ]
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'pathlib' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          ".claude/skills/loopr/scripts/loopr_wrapper.py:16",
+          "src/loopr/cli.py:14",
+          "src/loopr/interrogation/loop.py:14",
+          "src/loopr/judge/agent_client.py:10",
+          "tests/conftest.py:6",
+          "tests/test_cli.py:8",
+          "tests/test_judge_response_dispatch.py:16"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 7,
+        "pattern_id": "import:pathlib",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'pydantic' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          "src/loopr/gates/gates.py:12",
+          "src/loopr/models/interrogation.py:5",
+          "src/loopr/models/judge.py:11",
+          "tests/test_judge_scope.py:9"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 4,
+        "pattern_id": "import:pydantic",
+        "signal_qualifiers": []
+      },
+      {
+        "centrality": "core",
+        "deprecation_markers": [],
+        "description": "import 'subprocess' recurring across the touched surface",
+        "git_last_touched_days_ago": 0,
+        "git_major_author_count": 1,
+        "git_top_author_commit_share": 1.0,
+        "locations": [
+          ".claude/skills/loopr/scripts/loopr_wrapper.py:14",
+          "tests/conftest.py:5",
+          "tests/test_judge_response_dispatch.py:15"
+        ],
+        "naming_flags": false,
+        "occurrence_count": 3,
+        "pattern_id": "import:subprocess",
+        "signal_qualifiers": [
+          "at the minimum recurrence threshold; weak evidence of intentionality"
+        ]
+      }
+    ],
+    "touched_surface": [
+      "prompts/Template_prompts/STEP_10",
+      "prompts/Template_prompts/STEP _11",
+      "prompts/Template_prompts/step_12",
+      "prompts/loopr/step10_prd_modernization.md",
+      "prompts/loopr/step11_build.md",
+      "prompts/loopr/step12_review.md",
+      ".claude/skills/loopr/SKILL.md",
+      ".claude/skills/loopr/scripts/loopr_wrapper.py",
+      "src/loopr/cli.py",
+      "src/loopr/interrogation/loop.py",
+      "src/loopr/models/judge.py",
+      "src/loopr/models/interrogation.py",
+      "src/loopr/artifacts/baby_prd.py",
+      "src/loopr/gates/gates.py",
+      "src/loopr/judge/agent_client.py",
+      "loopr-PRD.md",
+      "loopr-MIGRATION.md",
+      "tests/conftest.py",
+      "tests/test_judge_scope.py",
+      "tests/test_judge_response_dispatch.py",
+      "tests/test_cli.py"
+    ],
+    "touched_surface_confirmed_hash": null
+  },
+  "condition_results": [
+    {
+      "condition": "c1_outcome",
+      "detail": "judge verdict reused: Names a concrete real-world friction as the outcome to remove -- currently must manually copy customized step10/11/12 prompts between separate sessions for each project; wants that friction gone, invoked through the skill instead. 'Automated' names the shape of the result (no manual relay step), not a specific technical architecture. The stated solution (skill invocation) is subordinate to the stated outcome (no more manual prompt-pasting), matching the rubric's accepted pattern. Borderline in that the deeper why (faster iteration? more consistent customization quality?) isn't spelled out, but the friction itself is concrete enough to count as the outcome, not just a restated approach.",
+      "force_resolved": false,
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c2_acceptance",
+      "detail": "judge verdict reused: The core claim -- the loop kicks off, processes phase after phase, and reaches completion -- is cleanly observable: a third party can check for a terminal completion marker and phase-progression commits without asking the builder anything. The 'built according to what the spec outlined' clause is softer, since confirming a phase matches its spec requires comparing artifacts against written requirements rather than a single boolean check -- but that comparison is a concrete, repeatable process (map spec sections to diff, same mechanism the existing step12 review already uses), not a subjective feeling like 'feels good' or 'works well'. Passes on the strength of the completion-marker observability, with the spec-compliance clause as a real but checkable qualifier.",
+      "force_resolved": false,
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c3_scope_edges",
+      "detail": "judge verdict reused: Names two concrete, specific boundary objects -- native Claude Code subagents (.claude/agents/ generation) and a Traycer-based harness -- not vague language like 'nothing fancy'. A builder reading this later knows unambiguously: a request to generate native subagent files or integrate Traycer falls outside this build; a request to produce customized prompt-file artifacts falls inside it. The stated reasons (Traycer parked and unassessed, subagents explored but demoted to non-locked) are traceable to loopr-MIGRATION.md, not asserted without grounding.",
+      "force_resolved": false,
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c4_boundary",
+      "detail": "boundary confirmed and hash matches current text",
+      "force_resolved": false,
+      "judge_pass": null,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c5_soft_context",
+      "detail": "at least one note judge-confirmed as genuine soft context",
+      "force_resolved": false,
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    },
+    {
+      "condition": "c6_no_unknowns",
+      "detail": "structural pass and all items already judge-confirmed",
+      "force_resolved": false,
+      "judge_pass": true,
+      "overall": true,
+      "structural_pass": true
+    }
+  ],
+  "consecutive_judge_failures": {
+    "c1_outcome": 0
+  },
+  "context_notes": [
+    {
+      "source": "stated",
+      "text": "No soft context for this build. A larger set of project-scope decisions came up during this\nconversation (the relationship between loopr and a possible future multi-agent runtime, corrected\nmechanisms for per-step model control, and a revised subagent count for that future work) -- but\nthose are explicitly deferred, logged separately outside this interrogation, and not being folded\ninto this build's confirmed scope. This build proceeds as already scoped: automating the step10/11/12\nprompt-file customization workflow, nothing more."
+    }
+  ],
+  "force_resolved_conditions": [],
+  "gates": {
+    "gate_1_baby_prd": {
+      "confirmed": true,
+      "confirmed_payload_digest": "ac49e2905c3031a03c0ed39201002b05ebd9d7fc6c2b632743edf4e1adb02835",
+      "gate": "gate_1_baby_prd",
+      "payload_digest": "ac49e2905c3031a03c0ed39201002b05ebd9d7fc6c2b632743edf4e1adb02835",
+      "requested_round": 5,
+      "user_amendment": "Wording imprecision disclosed and accepted, not silently overlooked: customization happens in the architect session; execution of the customized step10/11/12 prompts happens in a separate executor session, not the architect. Gate 1 has no mechanism to actually apply this correction to state (confirmed finding, logged for a real fix). The corrected wording will be carried into the downstream spec written from this run."
+    },
+    "gate_2_boundary": {
+      "confirmed": true,
+      "confirmed_payload_digest": "f9be3c9a360e8a52571cd1d846cde27fa68c991b2353af27a2fbee1f5732e5af",
+      "gate": "gate_2_boundary",
+      "payload_digest": "f9be3c9a360e8a52571cd1d846cde27fa68c991b2353af27a2fbee1f5732e5af",
+      "requested_round": 4,
+      "user_amendment": null
+    }
+  },
+  "judge_log": [
+    {
+      "answered_at_round": 2,
+      "request": {
+        "call_id": "82148986421b25c5",
+        "call_type": "c1_outcome",
+        "created_round": 2,
+        "envelope_version": 2,
+        "inputs": {
+          "prefilter_flagged": false,
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions."
+        },
+        "rubric_id": "c1_outcome_v1",
+        "rubric_text": "Does this statement describe a desired real-world outcome/result (what becomes true when this is done, for whom), or does it prescribe a specific solution/implementation as the primary subject? Pass only if a concrete outcome is named. A stated solution is acceptable ONLY if it is explicitly subordinate to a stated outcome (e.g. 'I want X to happen; my current guess at how is Y' passes -- 'Y' alone does not)."
+      },
+      "request_sha256": "82d94bbd44b8a578aa36f8346db1657a6ecb1afb8c066aeb8ff8655aab6f3c83",
+      "response": {
+        "call_id": "82148986421b25c5",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "Names a concrete real-world friction as the outcome to remove -- currently must manually copy customized step10/11/12 prompts between separate sessions for each project; wants that friction gone, invoked through the skill instead. 'Automated' names the shape of the result (no manual relay step), not a specific technical architecture. The stated solution (skill invocation) is subordinate to the stated outcome (no more manual prompt-pasting), matching the rubric's accepted pattern. Borderline in that the deeper why (faster iteration? more consistent customization quality?) isn't spelled out, but the friction itself is concrete enough to count as the outcome, not just a restated approach.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "7af5ac194e7eecbfc604c6aecb085febda58e18f52749ee2cabe4bd70b4f12df"
+    },
+    {
+      "answered_at_round": 3,
+      "request": {
+        "call_id": "e647029da28ccd63",
+        "call_type": "c2_acceptance",
+        "created_round": 3,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ]
+        },
+        "rubric_id": "c2_acceptance_v1",
+        "rubric_text": "For each acceptance criterion, could a third party who did not build the system check it by observation or a concrete test, without needing to ask the builder for a judgment call? Pass only if at least one criterion is independently checkable this way. Reject criteria that are purely subjective ('feels fast', 'is good') with no observable proxy."
+      },
+      "request_sha256": "1a6512285e16bd2a175a6f9c7f2c932cbddbadd69fe5bd0b428ab5546d5fbae3",
+      "response": {
+        "call_id": "e647029da28ccd63",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "The core claim -- the loop kicks off, processes phase after phase, and reaches completion -- is cleanly observable: a third party can check for a terminal completion marker and phase-progression commits without asking the builder anything. The 'built according to what the spec outlined' clause is softer, since confirming a phase matches its spec requires comparing artifacts against written requirements rather than a single boolean check -- but that comparison is a concrete, repeatable process (map spec sections to diff, same mechanism the existing step12 review already uses), not a subjective feeling like 'feels good' or 'works well'. Passes on the strength of the completion-marker observability, with the spec-compliance clause as a real but checkable qualifier.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "d41331ce177c4bcf6830fb26a600f0e02209b3cb17d7250e0bb911e7a5aebd88"
+    },
+    {
+      "answered_at_round": 4,
+      "request": {
+        "call_id": "83c11cb45a84c6b9",
+        "call_type": "c3_scope_edges",
+        "created_round": 4,
+        "envelope_version": 2,
+        "inputs": {
+          "scope_edges": [
+            {
+              "item": "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism.",
+              "kind": "out",
+              "reason": "user-stated"
+            }
+          ]
+        },
+        "rubric_id": "c3_scope_edges_v1",
+        "rubric_text": "Is each named edge specific enough that a builder reading it later would know unambiguously whether a new request falls inside or outside it? Reject vague edges ('nothing fancy', 'basic stuff only') that don't name a concrete boundary object (a feature, an integration, a scale threshold, a user segment)."
+      },
+      "request_sha256": "29d396f79040d3c2575dd839b98157b67447d953bf7de27e8df531ba32eef36d",
+      "response": {
+        "call_id": "83c11cb45a84c6b9",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "Names two concrete, specific boundary objects -- native Claude Code subagents (.claude/agents/ generation) and a Traycer-based harness -- not vague language like 'nothing fancy'. A builder reading this later knows unambiguously: a request to generate native subagent files or integrate Traycer falls outside this build; a request to produce customized prompt-file artifacts falls inside it. The stated reasons (Traycer parked and unassessed, subagents explored but demoted to non-locked) are traceable to loopr-MIGRATION.md, not asserted without grounding.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "96d01d7a8a49c25cccb2b9f70cd4eb0bd37c3b7c1d626a6bf4403b5ed6b8d925"
+    },
+    {
+      "answered_at_round": 4,
+      "request": {
+        "call_id": "fbf49db336340f50",
+        "call_type": "boundary_proposal",
+        "created_round": 4,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "context_notes": [],
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "boundary_proposal_v1",
+        "rubric_text": "Given the confirmed problem statement, acceptance criteria, scope edges, and soft context notes so far, draft a plain-language boundary proposal: a short statement of what this build covers and what it explicitly does not, grounded only in what has actually been said in those fields -- never invent scope, never import an example from another project, never generalize beyond what the confirmed fields actually support. This is a DRAFT for the human to confirm or tweak at Gate 2, not a final decision -- state it as a proposal, not settled fact. Return the drafted text only; do not set confirmed status, that is the human's action alone."
+      },
+      "request_sha256": "934d5f0d076b534b13bda2fb9a8a8640fe4ec295de42d5d9b8cf471acc8636aa",
+      "response": {
+        "call_id": "fbf49db336340f50",
+        "drafted_text": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Drafted directly from the confirmed problem statement (automate the manual step10/11/12 paste workflow), the one confirmed acceptance criterion (observable end-to-end phase execution), and the confirmed scope edge (subagents and Traycer explicitly excluded). No soft context notes exist yet to incorporate. Nothing invented beyond these three fields.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "6cc9cd6ff852b641a2fd45b82b59fe943983b11a4e5ebd5d2abc089508e7d5d5"
+    },
+    {
+      "answered_at_round": 4,
+      "request": {
+        "call_id": "b9419b07bfac7256",
+        "call_type": "bf_relevance",
+        "created_round": 4,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "candidate_files": [
+            ".claude/loopr/baby_prd.md",
+            ".claude/loopr/conformance-ledger.md",
+            ".claude/loopr/context.md",
+            ".claude/skills/loopr/SKILL.md",
+            ".claude/skills/loopr/references/boundary-guide.md",
+            ".claude/skills/loopr/references/conformance-classification-guide.md",
+            ".claude/skills/loopr/references/context-md-guide.md",
+            ".claude/skills/loopr/references/continuity-model.md",
+            ".claude/skills/loopr/references/stopping-test.md",
+            ".claude/skills/loopr/scripts/loopr_wrapper.py",
+            ".coverage",
+            ".env",
+            ".env.example",
+            ".gitignore",
+            ".loopr-state.archived-skill-packaging-run/answer.txt",
+            ".loopr-state.archived-skill-packaging-run/gate_response.json",
+            ".loopr-state.archived-skill-packaging-run/judge_response.json",
+            ".loopr-state.archived-skill-packaging-run/state.json",
+            "BUILD_COMPLETE.md",
+            "Dockerfile",
+            "PHASE_1_SPEC.md",
+            "README.md",
+            "SKILL_PHASE_1_SPEC.md",
+            "_archive/claude-loopr-brownfield-proof/baby_prd.md",
+            "_archive/claude-loopr-brownfield-proof/conformance-ledger.md",
+            "_archive/claude-loopr-brownfield-proof/context.md",
+            "_archive/loopr-state-brownfield-proof/answer.txt",
+            "_archive/loopr-state-brownfield-proof/gate_response.json",
+            "_archive/loopr-state-brownfield-proof/judge_response.json",
+            "_archive/loopr-state-brownfield-proof/state.json",
+            "docker-compose.yml",
+            "docs/conformance-classification-spec.md",
+            "docs/modernization_log.md",
+            "docs/stopping-test-spec.md",
+            "entrypoint.sh",
+            "kaide-loop.sh",
+            "loop.gates.sh",
+            "loopr-MIGRATION.md",
+            "loopr-PRD.md",
+            "prompts/Template_prompts/STEP _11",
+            "prompts/Template_prompts/STEP_10",
+            "prompts/Template_prompts/step_12",
+            "prompts/loopr/step10_prd_modernization.md",
+            "prompts/loopr/step11_build.md",
+            "prompts/loopr/step12_review.md",
+            "prompts/step11_build.template.md",
+            "prompts/step12_5_audit.template.md",
+            "prompts/step12_review.audit-tail.template.md",
+            "prompts/step12_review.template.md",
+            "proofs/brownfield/FINDINGS.md",
+            "proofs/brownfield/baby_prd.md",
+            "proofs/brownfield/conformance-ledger.md",
+            "proofs/brownfield/context.md",
+            "proofs/brownfield/final_state.json",
+            "proofs/brownfield/judge_exchange_log.md",
+            "proofs/greenfield/FINDINGS.md",
+            "proofs/greenfield/baby_prd.md",
+            "proofs/greenfield/context.md",
+            "proofs/greenfield/final_state.json",
+            "proofs/greenfield/judge_exchange_log.md",
+            "proofs/skill-packaging/baby_prd.md",
+            "proofs/skill-packaging/conformance-ledger.md",
+            "proofs/skill-packaging/context.md",
+            "proofs/skill-packaging/final_state.json",
+            "proofs/skill-packaging/judge_exchange_log.md",
+            "pyproject.toml",
+            "run.log",
+            "scripts/preflight.sh",
+            "src/loopr/__init__.py",
+            "src/loopr/artifacts/__init__.py",
+            "src/loopr/artifacts/baby_prd.py",
+            "src/loopr/artifacts/conformance_ledger.py",
+            "src/loopr/artifacts/context_md.py",
+            "src/loopr/brownfield/__init__.py",
+            "src/loopr/brownfield/classify.py",
+            "src/loopr/brownfield/discovery.py",
+            "src/loopr/brownfield/evidence.py",
+            "src/loopr/checks/__init__.py",
+            "src/loopr/checks/conditions.py",
+            "src/loopr/checks/structural.py",
+            "src/loopr/cli.py",
+            "src/loopr/errors.py",
+            "src/loopr/exit_codes.py",
+            "src/loopr/gates/__init__.py",
+            "src/loopr/gates/gates.py",
+            "src/loopr/interrogation/__init__.py",
+            "src/loopr/interrogation/loop.py",
+            "src/loopr/interrogation/questions.py",
+            "src/loopr/judge/__init__.py",
+            "src/loopr/judge/agent_client.py",
+            "src/loopr/judge/envelope.py",
+            "src/loopr/judge/port.py",
+            "src/loopr/judge/scripted_client.py",
+            "src/loopr/models/__init__.py",
+            "src/loopr/models/brownfield.py",
+            "src/loopr/models/common.py",
+            "src/loopr/models/gates.py",
+            "src/loopr/models/interrogation.py",
+            "src/loopr/models/judge.py",
+            "src/loopr/py.typed",
+            "src/loopr/rubrics/__init__.py",
+            "src/loopr/rubrics/texts.py",
+            "src/loopr/state/__init__.py",
+            "src/loopr/state/store.py",
+            "supervised_run_stdout.log",
+            "tests/conftest.py",
+            "tests/test_artifacts.py",
+            "tests/test_boundary_proposal.py",
+            "tests/test_brownfield_classify.py",
+            "tests/test_brownfield_discovery.py",
+            "tests/test_brownfield_evidence.py",
+            "tests/test_c5_misplaced_routing.py",
+            "tests/test_cli.py",
+            "tests/test_conditions.py",
+            "tests/test_gates.py",
+            "tests/test_judge_clients.py",
+            "tests/test_judge_envelope.py",
+            "tests/test_judge_response_dispatch.py",
+            "tests/test_judge_scope.py",
+            "tests/test_no_hardcoded_domain.py",
+            "tests/test_no_paid_dependency.py",
+            "tests/test_round_cap.py",
+            "tests/test_state_store.py",
+            "tests/test_structural_checks.py"
+          ],
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_relevance_v1",
+        "rubric_text": "Given the confirmed problem statement, acceptance criteria, and scope edges, which of these candidate files are actually relevant to the work -- i.e. the new work will read, modify, or must interact with them? Select only genuinely relevant files; do not pad the selection for safety."
+      },
+      "request_sha256": "11fca95517909aa31bdf7a910384f181eaa9fcad522256981411ca3e17c8a15a",
+      "response": {
+        "call_id": "b9419b07bfac7256",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Template_prompts/ are the raw generic input the mechanism customizes; prompts/loopr/* are the existing hand-customized outputs (worked examples of the target shape). SKILL.md and loopr_wrapper.py are the invocation surface named in the problem statement ('invoked through the skill directly'). The src/loopr files are where the new judge-driven mechanism would actually live, each for a specific reason: cli.py (new command), interrogation/loop.py (control flow, same shape as the boundary-proposal fix), models/judge.py (new JudgeCallType + ALLOWED_INPUTS entry), models/interrogation.py (new state fields), artifacts/baby_prd.py (the rendering pattern to follow for a new artifact type), gates/gates.py (if confirmation is needed before customized output is trusted), judge/agent_client.py (dispatch pattern for the new call type). loopr-PRD.md and loopr-MIGRATION.md are where this capability needs to be documented, matching how every prior capability was folded in. The four test files are existing infrastructure that would need extending for a new judge call type and CLI command, based on how boundary_proposal's own tests were added. Excluded as not genuinely relevant: the abandoned Docker-harness templates and scripts, all proof/archive directories, docs/stopping-test-spec.md and docs/conformance-classification-spec.md (structurally similar precedent but not something this mechanism reads or modifies at runtime), and the bulk of the existing test suite (real precedent exists but not files this specific work touches).",
+        "selected_files": [
+          "prompts/Template_prompts/STEP_10",
+          "prompts/Template_prompts/STEP _11",
+          "prompts/Template_prompts/step_12",
+          "prompts/loopr/step10_prd_modernization.md",
+          "prompts/loopr/step11_build.md",
+          "prompts/loopr/step12_review.md",
+          ".claude/skills/loopr/SKILL.md",
+          ".claude/skills/loopr/scripts/loopr_wrapper.py",
+          "src/loopr/cli.py",
+          "src/loopr/interrogation/loop.py",
+          "src/loopr/models/judge.py",
+          "src/loopr/models/interrogation.py",
+          "src/loopr/artifacts/baby_prd.py",
+          "src/loopr/gates/gates.py",
+          "src/loopr/judge/agent_client.py",
+          "loopr-PRD.md",
+          "loopr-MIGRATION.md",
+          "tests/conftest.py",
+          "tests/test_judge_scope.py",
+          "tests/test_judge_response_dispatch.py",
+          "tests/test_cli.py"
+        ],
+        "verdict": null
+      },
+      "response_sha256": "d4183be8c7c6c70720aef5c99371054b4cf9f19180ebf2986851b2ae7ba91b64"
+    },
+    {
+      "answered_at_round": 4,
+      "request": {
+        "call_id": "e00b71e66751dd47",
+        "call_type": "bf_classify",
+        "created_round": 4,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "peripheral",
+            "deprecation_markers": [],
+            "description": "decorator 'model_validator' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/models/interrogation.py:126",
+              "src/loopr/models/interrogation.py:37",
+              "src/loopr/models/interrogation.py:60",
+              "src/loopr/models/interrogation.py:85",
+              "src/loopr/models/judge.py:132",
+              "src/loopr/models/judge.py:98"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 6,
+            "pattern_id": "decorator:model_validator",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "cc2c726d8729047733e222353c70f4ca7677db40900b3836c7f8e535d5a6b499",
+      "response": {
+        "call_id": "e00b71e66751dd47",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Recurring (6 occurrences, above the threshold), actively maintained (touched today, in the same commit as the boundary-proposal fix), no deprecation markers, single-author/100%-commit-share is the expected baseline for this solo-founder repo rather than a cruft signal. This is Pydantic's own standard validator decorator, already used throughout the codebase for exactly this shape of work (check_mode_coherent, check_scope, check_response_shape). Does not conflict with the stated intent -- any new validation logic this build's models need should follow the same pattern, not invent an alternative.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "ce2ab0f39155d6b4e156d4c41cdeff25f46cd62069d8905d4f420196cfb8d17d"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "0493a6499bd195ea",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "peripheral",
+            "deprecation_markers": [],
+            "description": "decorator 'pytest.fixture' recurring across the touched surface",
+            "git_last_touched_days_ago": 4,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "tests/conftest.py:14",
+              "tests/conftest.py:24",
+              "tests/conftest.py:29"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 3,
+            "pattern_id": "decorator:pytest.fixture",
+            "signal_qualifiers": [
+              "at the minimum recurrence threshold; weak evidence of intentionality"
+            ]
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "157b9e406ca7ecd6e3e9f07dccd537b27d04d46b27b7b43199575e82e35f2a5d",
+      "response": {
+        "call_id": "0493a6499bd195ea",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "pytest.fixture is a standard, universally-recognized Python testing convention, not an obscure or project-specific one -- the 'weak evidence of intentionality' qualifier reflects the occurrence count sitting exactly at the recurrence threshold, not genuine doubt about whether this pattern is legitimate. Actively maintained (touched 4 days ago), no deprecation markers, doesn't conflict with the build's intent. Any new test fixtures this build adds should use the same decorator, consistent with the existing suite.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "cd40c1542a57ee8db7ace80d9a57371201f71407ae2385a46ca8e63f83537539"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "960cf95322c5ed5e",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "peripheral",
+            "deprecation_markers": [],
+            "description": "decorator 'pytest.mark.parametrize' recurring across the touched surface",
+            "git_last_touched_days_ago": 4,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "tests/test_judge_scope.py:16",
+              "tests/test_judge_scope.py:32",
+              "tests/test_judge_scope.py:47"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 3,
+            "pattern_id": "decorator:pytest.mark.parametrize",
+            "signal_qualifiers": [
+              "at the minimum recurrence threshold; weak evidence of intentionality"
+            ]
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "963cbc1ba5e58405b3ff9c1b93a7b56ace4098ef8f72cfd3b4a59b28b495152a",
+      "response": {
+        "call_id": "960cf95322c5ed5e",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "pytest.mark.parametrize is a standard, canonical pytest convention for parametrized test cases -- not obscure or project-specific. The 'weak evidence of intentionality' qualifier reflects the occurrence count sitting at the recurrence threshold, not doubt about the pattern's legitimacy. Actively maintained (4 days ago), no deprecation markers, no conflict with the build's intent. New parametrized tests this build adds should follow the same convention.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "ad5e214c234ef2438ca57a9aafc72c930a6d6e32d92fddd2a9fd1e736425afdd"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "1a799ce6c4124c54",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import '__future__' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              ".claude/skills/loopr/scripts/loopr_wrapper.py:11",
+              "src/loopr/artifacts/baby_prd.py:7",
+              "src/loopr/cli.py:8",
+              "src/loopr/gates/gates.py:10",
+              "src/loopr/interrogation/loop.py:10",
+              "src/loopr/judge/agent_client.py:8",
+              "src/loopr/models/interrogation.py:3",
+              "src/loopr/models/judge.py:7",
+              "tests/conftest.py:3",
+              "tests/test_cli.py:5",
+              "tests/test_judge_response_dispatch.py:12",
+              "tests/test_judge_scope.py:3"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 12,
+            "pattern_id": "import:__future__",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "dacb2bccb05477fb085ceb310fca131ecaa480642052d9e0342644714965ba89",
+      "response": {
+        "call_id": "1a799ce6c4124c54",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "This is not just an observed pattern but an explicitly mandated stack convention -- loopr-MIGRATION.md SS8's forward-reference discipline requires it. Recurring across 12 locations, core centrality, actively maintained (touched today), no deprecation markers. Any new modules this build adds must include it, matching the rest of the codebase.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "3a3e39af87b18383cb2a49c4b8e373cd49916bcb11d9fad06c00731ebbbcd3d4"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "56c6a9d79e059759",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'json' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              ".claude/skills/loopr/scripts/loopr_wrapper.py:13",
+              "src/loopr/cli.py:11",
+              "tests/test_cli.py:7",
+              "tests/test_judge_response_dispatch.py:14"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 4,
+            "pattern_id": "import:json",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "c3a8040527f9043ee4b8d99b8720155fd9b021a6c5799a95fb3513238b8684b4",
+      "response": {
+        "call_id": "56c6a9d79e059759",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard library import, core centrality, actively maintained, no deprecation markers, no conflict with the build's intent. Nothing to avoid here -- any new code needing JSON handling should use it the same way.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "f50207666134214dc16c3f4f5484e74e9942bcf8c40da250ba4118e3c2dc5ab5"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "1c27e0ff64b47081",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              ".claude/skills/loopr/scripts/loopr_wrapper.py:27",
+              "src/loopr/cli.py:16",
+              "src/loopr/interrogation/loop.py:16",
+              "tests/test_cli.py:10",
+              "tests/test_judge_response_dispatch.py:18"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 5,
+            "pattern_id": "import:loopr",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "3541ba64b26894af500254680676b353c888530b7e420cfe66a9979ce7549905",
+      "response": {
+        "call_id": "1c27e0ff64b47081",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Importing loopr's own package is exactly what a thin orchestration wrapper and its tests are supposed to do -- core centrality, actively maintained, no deprecation markers, no conflict with the build's intent.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "868cb7025b06a3246e811b33b6b4664139aabdbed1202fa672054936266d54ed"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "c8ddb1cd4d2d985a",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "peripheral",
+            "deprecation_markers": [],
+            "description": "import 'loopr.gates.gates' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/cli.py:21",
+              "src/loopr/interrogation/loop.py:245",
+              "src/loopr/interrogation/loop.py:26"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 3,
+            "pattern_id": "import:loopr.gates.gates",
+            "signal_qualifiers": [
+              "at the minimum recurrence threshold; weak evidence of intentionality"
+            ]
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "68c94c777b81e4f6c5433db3cb6f551b2a197588d97a056a2de1cdd2436ee150",
+      "response": {
+        "call_id": "c8ddb1cd4d2d985a",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard internal module import, actively maintained, no deprecation markers. Occurrence count at threshold reflects import-site count, not doubt about legitimacy -- importing gates.gates where gate logic is needed is expected, not cruft.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "9d558993dda554d3a46da6a0a418df2991d9234a0fe7d26265f28a8bc7882952"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "6b08c7523d5941e2",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.judge.envelope' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/cli.py:23",
+              "src/loopr/cli.py:56",
+              "src/loopr/gates/gates.py:14",
+              "src/loopr/interrogation/loop.py:36",
+              "src/loopr/judge/agent_client.py:12"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 5,
+            "pattern_id": "import:loopr.judge.envelope",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "147b5e436eaba868651939f22064d7b279dfeb93aaf9a56d9b5db06ef7485704",
+      "response": {
+        "call_id": "6b08c7523d5941e2",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Expected wherever the judge envelope format is needed.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "a8c87c62b6f89f538aedc77edd124aab3857525e6563ba70dd3906cd189fd402"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "01f6b009903550bc",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.models.brownfield' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/cli.py:96",
+              "src/loopr/interrogation/loop.py:38",
+              "src/loopr/models/interrogation.py:134",
+              "tests/conftest.py:31"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 4,
+            "pattern_id": "import:loopr.models.brownfield",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "c1fef91a3bd6b469c2e80ffdaa999a141de6bd69b020863fcd06f569ec7d7319",
+      "response": {
+        "call_id": "01f6b009903550bc",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Expected wherever brownfield models are needed.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "85d77cc95d38fd8dd6e8d34d91e778c284d247104cc58722e77dbfffe9be44b3"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "b5431b0ae1feed34",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.models.common' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/cli.py:24",
+              "src/loopr/gates/gates.py:15",
+              "src/loopr/interrogation/loop.py:133",
+              "src/loopr/interrogation/loop.py:360",
+              "src/loopr/interrogation/loop.py:375",
+              "src/loopr/interrogation/loop.py:39",
+              "src/loopr/models/interrogation.py:7",
+              "src/loopr/models/judge.py:13",
+              "tests/conftest.py:10",
+              "tests/test_cli.py:12",
+              "tests/test_judge_response_dispatch.py:20",
+              "tests/test_judge_scope.py:12"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 12,
+            "pattern_id": "import:loopr.models.common",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "f172de14fa6e67f225ea2e8cc79e49dc86f381c41f3bc8615b601b3c55d9dd12",
+      "response": {
+        "call_id": "b5431b0ae1feed34",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard internal module import, high recurrence (12), core centrality, actively maintained, no deprecation markers. Shared common types are expected to be widely imported.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "8846c0126cde3624cb629958c5cd1cabd9e7371f20bcb61225b486054570c1e1"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "3abdb0923f75957e",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.models.gates' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/gates/gates.py:16",
+              "src/loopr/interrogation/loop.py:40",
+              "src/loopr/models/interrogation.py:17"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 3,
+            "pattern_id": "import:loopr.models.gates",
+            "signal_qualifiers": [
+              "at the minimum recurrence threshold; weak evidence of intentionality"
+            ]
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "14b37c827f44aa94833abe7c5d7fd27cef90e3629e268a4784b5b91f96a1af09",
+      "response": {
+        "call_id": "3abdb0923f75957e",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Threshold-level occurrence count reflects import-site count, not doubt about legitimacy.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "41ca315c0d55a17ee237b83cea8c00dfb655088b1e0d5bd80c5c5b1c66b4cb8f"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "4781e725922d7c96",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.models.interrogation' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/artifacts/baby_prd.py:9",
+              "src/loopr/cli.py:25",
+              "src/loopr/gates/gates.py:17",
+              "src/loopr/interrogation/loop.py:108",
+              "src/loopr/interrogation/loop.py:361",
+              "src/loopr/interrogation/loop.py:41",
+              "tests/conftest.py:11"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 7,
+            "pattern_id": "import:loopr.models.interrogation",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "94048e1b9ead154c939a879d378d1102a78e1d6e55c5be46dc5ed874bf04955a",
+      "response": {
+        "call_id": "4781e725922d7c96",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Interrogation-state types are expected to be widely imported.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "14160953667825bd0c9a90514f3b3c2af14725d9c935facaec7daa489eb427b7"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "8ad87ad02afcba2c",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.models.judge' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/cli.py:26",
+              "src/loopr/gates/gates.py:18",
+              "src/loopr/interrogation/loop.py:42",
+              "src/loopr/judge/agent_client.py:13",
+              "src/loopr/models/interrogation.py:135",
+              "tests/test_cli.py:13",
+              "tests/test_judge_response_dispatch.py:21",
+              "tests/test_judge_scope.py:13"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 8,
+            "pattern_id": "import:loopr.models.judge",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "c13a762d632f505456c52c00403d99440cd17340d71b8f4a89504b54954800cd",
+      "response": {
+        "call_id": "8ad87ad02afcba2c",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Judge envelope types are expected to be widely imported.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "44538eddbbed28dc6b2a95f266327a86485085f98da3ff197445c2e952bd4705"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "43527097a388fec3",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'loopr.state.store' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/cli.py:27",
+              "tests/test_cli.py:14",
+              "tests/test_judge_response_dispatch.py:22"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 3,
+            "pattern_id": "import:loopr.state.store",
+            "signal_qualifiers": [
+              "at the minimum recurrence threshold; weak evidence of intentionality"
+            ]
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "82f91cec941aeacf391af9c1389317f2b9a8814bc87a1b4e797313afb09dfe7f",
+      "response": {
+        "call_id": "43527097a388fec3",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard internal module import, core centrality, actively maintained, no deprecation markers. Threshold-level occurrence count reflects import-site count, not doubt about legitimacy.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "81b105f6111a2295cf7ed2fb743e58b7644a214917593301ee7c2ec24f436161"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "9e15a01c00f4ce04",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'pathlib' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              ".claude/skills/loopr/scripts/loopr_wrapper.py:16",
+              "src/loopr/cli.py:14",
+              "src/loopr/interrogation/loop.py:14",
+              "src/loopr/judge/agent_client.py:10",
+              "tests/conftest.py:6",
+              "tests/test_cli.py:8",
+              "tests/test_judge_response_dispatch.py:16"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 7,
+            "pattern_id": "import:pathlib",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "75e010817375b4484099ad9754a67f8078ab8acbd166bac7c16506d2ed738b57",
+      "response": {
+        "call_id": "9e15a01c00f4ce04",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard library import, core centrality, actively maintained, no deprecation markers, no ambiguity.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "bc51f302c2d144c980567e31bd454f83a3150329f169954f4f82ab741f7d94ab"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "e039c7ce29ad85c5",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'pydantic' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              "src/loopr/gates/gates.py:12",
+              "src/loopr/models/interrogation.py:5",
+              "src/loopr/models/judge.py:11",
+              "tests/test_judge_scope.py:9"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 4,
+            "pattern_id": "import:pydantic",
+            "signal_qualifiers": []
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "bb7e2c8b14318e09c0d7381267452102d7806b2837f0f6a040743e4b8c46eaea",
+      "response": {
+        "call_id": "e039c7ce29ad85c5",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Pydantic is loopr's one mandated runtime dependency (loopr-MIGRATION.md SS8), core centrality, actively maintained, no deprecation markers. Unambiguous.",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "047bac6b1b3456b08d5bb79ce3c7e2e581e4d8d9d254f105145aeaeecfb3af77"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "13fbfffd327fc08b",
+        "call_type": "bf_classify",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "evidence_bundle": {
+            "centrality": "core",
+            "deprecation_markers": [],
+            "description": "import 'subprocess' recurring across the touched surface",
+            "git_last_touched_days_ago": 0,
+            "git_major_author_count": 1,
+            "git_top_author_commit_share": 1.0,
+            "locations": [
+              ".claude/skills/loopr/scripts/loopr_wrapper.py:14",
+              "tests/conftest.py:5",
+              "tests/test_judge_response_dispatch.py:15"
+            ],
+            "naming_flags": false,
+            "occurrence_count": 3,
+            "pattern_id": "import:subprocess",
+            "signal_qualifiers": [
+              "at the minimum recurrence threshold; weak evidence of intentionality"
+            ]
+          },
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "bf_classify_v1",
+        "rubric_text": "Given this pattern's evidence and the confirmed problem statement, acceptance criteria, scope edges, and boundary, classify:\n- CONFORM if the pattern is a real, current convention: recurring or structurally central, actively maintained (recent commits, more than one author, or expected staleness for genuinely stable code), no deprecation markers, and does not conflict with the stated intent.\n- DO_NOT_REPLICATE if it shows cruft signals -- isolated/peripheral, stale, single-author, deprecation-marked, or a one-off inconsistent with the surface's otherwise-different approach -- AND does not itself conflict with the stated intent.\n- CONFLICT if conforming to this pattern, or the new work simply having to coexist with it, would make the stated outcome, an acceptance criterion, or the boundary NOT hold.\n- AMBIGUOUS if the evidence signals genuinely conflict with each other and no confident call is possible.\nIMPORTANT CAVEATS on the evidence bundle's signals (read signal_qualifiers on the bundle for which apply here): staleness (git_last_touched_days_ago) alone is NOT sufficient for DO_NOT_REPLICATE -- stable, mature, correct code is also old. A deprecation marker may indicate 'on-hold' debt (correct code intentionally blocked on an external event), not cruft -- if the marker's text suggests this, prefer AMBIGUOUS over DO_NOT_REPLICATE. Do not treat any single signal as dispositive on its own."
+      },
+      "request_sha256": "6de5e24496ae18faf5ab9202ebc93f471d7794b985f44ff8d4e0a96ea9b35f94",
+      "response": {
+        "call_id": "13fbfffd327fc08b",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": null,
+        "reason": "Standard library import, core centrality, actively maintained, no deprecation markers. Plausibly how the wrapper invokes the loopr CLI as an external process -- consistent with this build's own confirmed shape (a thin orchestration layer driving the existing CLI contract, not reimplementing it in-process).",
+        "selected_files": null,
+        "verdict": "conform"
+      },
+      "response_sha256": "abbaf9a829685409424415da2eefa4191af1c127522bec3bab824c90aecef8a0"
+    },
+    {
+      "answered_at_round": 5,
+      "request": {
+        "call_id": "234d9828a81a9cb1",
+        "call_type": "c5_soft_context",
+        "created_round": 5,
+        "envelope_version": 2,
+        "inputs": {
+          "acceptance_criteria": [
+            "If the loop kicks off and runs end-to-end -- executing the spec-driven build across all the phases\nthat were specced out in the PRD, with each phase actually getting built according to what the spec\noutlined -- then that's how you'd know it worked. Not a feeling, an observable run: it starts, it\nprocesses phase after phase per the spec, and it completes."
+          ],
+          "boundary": "This build automates the customization and sequencing of the step10/11/12 prompt-file workflow -- given a project's confirmed spec context, it produces the customized step10 (PRD modernization + phase-spec generation), step11 (build), and step12 (QA review + next-phase-spec) prompts, and drives their execution end-to-end without the user manually pasting each one into a separate session. It does not build or invoke native Claude Code subagents, and it does not adapt or integrate Traycer -- both remain parked, unassessed mechanisms outside this build's scope. Success is observable: the loop runs and executes the spec-driven build across every phase specced in the target project's PRD, to completion.",
+          "context_note": "No soft context for this build. A larger set of project-scope decisions came up during this\nconversation (the relationship between loopr and a possible future multi-agent runtime, corrected\nmechanisms for per-step model control, and a revised subagent count for that future work) -- but\nthose are explicitly deferred, logged separately outside this interrogation, and not being folded\ninto this build's confirmed scope. This build proceeds as already scoped: automating the step10/11/12\nprompt-file customization workflow, nothing more.",
+          "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+          "scope_edges": [
+            "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism."
+          ]
+        },
+        "rubric_id": "c5_soft_context_v2",
+        "rubric_text": "First, relevance: does this note actually relate to the CONFIRMED problem_statement, acceptance_criteria, scope_edges, or boundary for THIS build? If it is well-formed, confidently phrased, or even stated as settled fact, but has no bearing on any of those four fields, REJECT it outright as off-topic -- do not route it anywhere. Confident phrasing is not evidence of relevance. Second, only for notes that pass the relevance check: does this note change how the finished build would be JUDGED (accepted/rejected) without being expressible as a testable spec requirement? If it IS expressible as one of the existing or a new acceptance criterion, it belongs there, not here -- flag as misplaced rather than failing outright."
+      },
+      "request_sha256": "8f557bb64894d79de789eb094188fb6116e8e7cac0182c92a99a9538a2dd3186",
+      "response": {
+        "call_id": "234d9828a81a9cb1",
+        "drafted_text": null,
+        "misplaced": false,
+        "missing": null,
+        "passed": true,
+        "reason": "This is the explicit-none case the spec designed for: the user genuinely has nothing to add beyond what's already confirmed. The note doesn't introduce off-topic content -- it explicitly reaffirms the already-confirmed boundary ('proceeds as already scoped... nothing more') and transparently explains why a larger set of related decisions was deliberately excluded rather than silently omitted. That transparency is itself relevant to how this build should be read, not a relevance violation.",
+        "selected_files": null,
+        "verdict": null
+      },
+      "response_sha256": "380a2db8a5e1dc03a3a889eb352ed47b4ff7d04e151f730536045ea4a5773a15"
+    }
+  ],
+  "max_rounds": 8,
+  "mode": "brownfield",
+  "open_questions": [],
+  "problem_statement": "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12 prompts.\nRight now I have to paste the step 10 prompt into a separate architect session by hand each time,\ncustomized for whatever project I'm working on, then paste step 11 and step 12 in turn. I want that\nautomated -- invoked through the skill directly, instead of manually copying prompts between\nsessions.",
+  "problem_statement_prefilter_flagged": false,
+  "repo_root": "C:\\Users\\hp\\kaide-loop",
+  "round": 5,
+  "schema_version": 1,
+  "scope_edges": [
+    {
+      "item": "Both native Claude Code subagents and a Traycer-based harness are out of scope for this build.\nTraycer is explicitly parked (locked sequencing step 3, still unassessed against the three\ninvariants), and native subagents were explored but demoted to a non-locked idea. This build only\nautomates producing the same prompt-file artifacts (step10/11/12-style) already used manually -- not\neither heavier execution mechanism.",
+      "kind": "out",
+      "reason": "user-stated"
+    }
+  ]
+}
