@@ -148,4 +148,100 @@ RUBRICS: Mapping[JudgeCallType, RubricSpec] = {
             "by the given problem statement, acceptance criteria, and boundary."
         ),
     ),
+    JudgeCallType.STEP11_CUSTOMIZATION: RubricSpec(
+        rubric_id="step11_customization_v1",
+        text=(
+            "Customize this template for THIS project, using only the confirmed problem statement, "
+            "acceptance criteria, scope edges, boundary, soft context notes, conformance summary, "
+            "and the project's own PHASE_1_SPEC.md (produced by step10 having actually run) given -- "
+            "never invent detail, never import an example from another project. This is a synthesis "
+            "task, not a pass/fail judgment: fill and adapt every placeholder you can resolve from "
+            "the given fields; where a placeholder's value is not yet knowable even now, leave it "
+            "exactly as it appears in the template -- do not guess, do not delete it, do not "
+            "fabricate a plausible-looking value. Resolve [PHASE_COUNT] by reading it directly from "
+            "PHASE_1_SPEC.md's own SS0 phase-plan header ('Phase 1 of N') -- it is now genuinely "
+            "knowable, unlike in step10's own template, precisely because step10 has already run. "
+            "PRESERVE EVERY SECTION, IN THE SAME ORDER, WITH THE SAME HEADERS, EXCEPT: the "
+            "'TEMPLATE CUSTOMIZATION CHECKLIST' section must be removed entirely from your output -- "
+            "its own text says to remove it before use, it is scaffolding for a human customizing by "
+            "hand, never content for the executing agent. Elsewhere, fill and adapt, never "
+            "restructure, condense, reorder, or rewrite the template's own shape. The "
+            "'<<CITATION_GATE_INGESTION_BLOCK: ...>>' block is a judgment call, not a fill target: "
+            "if the confirmed spec content establishes load-bearing arXiv citations anchoring this "
+            "project's architecture, resolve it into real, project-specific instructions per what "
+            "the block itself describes; otherwise remove it entirely, per its own stated fallback "
+            "('Otherwise remove this block') -- it specifies no replacement line, so do not invent "
+            "one. State which way you decided, and why, in your reason. Tags and reject-pattern "
+            "shorthand that merely LOOK like placeholders (e.g. '[EXECUTOR]', the checkbox markup "
+            "'[ ]', or the output-format examples inside the AUTONOMOUS CRITIQUE section such as "
+            "'[specified]'/'[implemented instead]'/'[reason]') are not placeholders -- leave them "
+            "completely untouched, byte-for-byte; they are emitted by the agent that executes this "
+            "prompt, not by you. Return the customized text only."
+        ),
+    ),
+    JudgeCallType.STEP11_FIDELITY_JUDGE: RubricSpec(
+        rubric_id="step11_fidelity_judge_v1",
+        text=(
+            "Given the original template and the customized output, is the injected content "
+            "genuinely specific to THIS project -- naming its actual files, invariants, boundary, "
+            "phase count, and stack -- or is it generic filler that would read identically for any "
+            "project? Verbatim template text with placeholders merely deleted (not replaced with "
+            "real, project-specific content) is a FAIL, not a pass. If a citation-gate decision was "
+            "made, is the resolution genuinely reasoned (real citation content if included; real, "
+            "specific reasoning if not -- not a bare restatement with nothing behind it) rather than "
+            "a placeholder-shaped non-answer? Reject outright if any resolved value could describe "
+            "an arbitrary, unrelated project rather than the one actually described by the given "
+            "problem statement, acceptance criteria, and boundary."
+        ),
+    ),
+    JudgeCallType.STEP12_CUSTOMIZATION: RubricSpec(
+        rubric_id="step12_customization_v1",
+        text=(
+            "Customize this template for THIS project, using only the confirmed problem statement, "
+            "acceptance criteria, scope edges, boundary, soft context notes, conformance summary, "
+            "and the project's own PHASE_1_SPEC.md (produced by step10 having actually run) given -- "
+            "never invent detail, never import an example from another project. This is a synthesis "
+            "task, not a pass/fail judgment: fill and adapt every placeholder you can resolve from "
+            "the given fields; where a placeholder's value is not yet knowable even now, leave it "
+            "exactly as it appears in the template -- do not guess, do not delete it, do not "
+            "fabricate a plausible-looking value. Resolve [PHASE_COUNT] by reading it directly from "
+            "PHASE_1_SPEC.md's own SS0 phase-plan header ('Phase 1 of N') -- it is now genuinely "
+            "knowable, unlike in step10's own template, precisely because step10 has already run. "
+            "[EXECUTOR_AGENT_FICTION] names the entity that supposedly wrote the code under review: "
+            "draft a value grounded only in the confirmed spec content available to you -- if that "
+            "content doesn't establish genuine build/review separateness, a generic fictional name "
+            "is the honest default; never infer or encode anything about session topology, which you "
+            "are not told and must not guess at. PRESERVE EVERY SECTION, IN THE SAME ORDER, WITH THE "
+            "SAME HEADERS, EXCEPT: the 'TEMPLATE CUSTOMIZATION CHECKLIST' section must be removed "
+            "entirely from your output -- its own text says to remove it before use, it is "
+            "scaffolding for a human customizing by hand, never content for the executing agent. "
+            "Elsewhere, fill and adapt, never restructure, condense, reorder, or rewrite the "
+            "template's own shape. The '<<CITATION_GATE_BLOCK: ...>>' block is a judgment call, not "
+            "a fill target: if the confirmed spec content establishes load-bearing arXiv citations "
+            "anchoring this project's architecture, resolve it into real, project-specific "
+            "instructions per what the block itself describes; otherwise replace it with genuine, "
+            "project-specific reasoning for why no citation gate applies -- its own stated fallback "
+            "line ('No citation re-verification gate required for this project.') is a starting "
+            "point, not a substitute for actually explaining why, in this project's own terms. State "
+            "which way you decided, and why, in your reason. Tags and reject-pattern shorthand that "
+            "merely LOOK like placeholders (e.g. '[EXECUTOR]' or the checkbox markup '[ ]') are not "
+            "placeholders -- leave them completely untouched, byte-for-byte; they are emitted by the "
+            "agent that executes this prompt, not by you. Return the customized text only."
+        ),
+    ),
+    JudgeCallType.STEP12_FIDELITY_JUDGE: RubricSpec(
+        rubric_id="step12_fidelity_judge_v1",
+        text=(
+            "Given the original template and the customized output, is the injected content "
+            "genuinely specific to THIS project -- naming its actual files, invariants, boundary, "
+            "phase count, and stack -- or is it generic filler that would read identically for any "
+            "project? Verbatim template text with placeholders merely deleted (not replaced with "
+            "real, project-specific content) is a FAIL, not a pass. If a citation-gate decision was "
+            "made, is the resolution genuinely reasoned (real citation content if included; real, "
+            "specific reasoning if not -- not a bare restatement of the template's own fallback line "
+            "with nothing added) rather than a placeholder-shaped non-answer? Reject outright if any "
+            "resolved value could describe an arbitrary, unrelated project rather than the one "
+            "actually described by the given problem statement, acceptance criteria, and boundary."
+        ),
+    ),
 }

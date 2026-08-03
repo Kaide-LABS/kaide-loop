@@ -77,6 +77,41 @@ def discover_template(repo_root: Path, step: CustomizationStep) -> Path:
     return matches[0]
 
 
+_PHASE_1_SPEC_FILENAME = "PHASE_1_SPEC.md"
+_MODERNIZATION_CHANGELOG_HEADING = "## MODERNIZATION CHANGELOG"
+
+
+def find_step10_execution_artifacts(repo_root: Path) -> tuple[Path, Path] | None:
+    """The SS1.1 gating condition, checked directly against real files: `loopr customize --step 11`
+    and `--step 12` must refuse to run unless step10 has actually EXECUTED in the target project, not
+    merely been customized (a fidelity-passing step10 PROMPT is not the same as step10 having been
+    RUN against the project). Returns (modernised_prd_path, phase_1_spec_path) if both of step10's
+    real deliverables exist, else None -- never inferred from CustomizationState.step10_fidelity,
+    which only proves the prompt was well-formed.
+
+    `PHASE_1_SPEC.md` (Deliverable B) is a fixed filename, stated literally by STEP_10's own template
+    text -- checked by exact name at repo_root. The modernised PRD (Deliverable A) is NOT a fixed
+    filename -- STEP_10's own default is "ULTIMATE_PRD.md", but that default is commonly overridden
+    (verified: this project's own real customization, prompts/loopr/step10_prd_modernization.md,
+    uses "loopr-PRD.md" instead). Detected by CONTENT instead: STEP_10's own template mandates every
+    modernised PRD carry a "## MODERNIZATION CHANGELOG" section ("Changelog. Append ## MODERNIZATION
+    CHANGELOG listing every change made...") -- the first *.md file at repo_root containing that
+    heading is treated as the modernised PRD. More robust than guessing a filename, and grounded in
+    what the template itself requires, not assumed."""
+    phase_1_spec_path = repo_root / _PHASE_1_SPEC_FILENAME
+    if not phase_1_spec_path.is_file():
+        return None
+
+    for candidate in sorted(repo_root.glob("*.md")):
+        if candidate == phase_1_spec_path:
+            continue
+        if not candidate.is_file():
+            continue
+        if _MODERNIZATION_CHANGELOG_HEADING in candidate.read_text(encoding="utf-8"):
+            return candidate, phase_1_spec_path
+    return None
+
+
 def _all_caps_core(stripped: str) -> str:
     """Strips one trailing parenthetical, if present, and returns what remains. A genuine STEP_10
     section header may carry a lowercase-content parenthetical qualifier (e.g. "WHY THIS MUST BE
@@ -294,16 +329,134 @@ _WIDE_BRACKET_SPAN_RE = re.compile(r"\[[^\[\]]{1,2000}\]", re.DOTALL)
 # two token sets.
 STEP10_FILL_IN_BLOCK_MARKERS: tuple[str, ...] = ("[PROJECT HARD BOUNDARY",)
 
+# STEP_11 / step_12 (CUSTOMIZATION_PHASE_2_SPEC.md SS1.2): every distinct bracket-shaped token
+# actually present in the real files, verified directly (not transcribed from the spec's own table --
+# it has already been wrong once in this build's history, for a different token). [PHASE_COUNT]'s
+# flip to customizer-resolvable HERE, versus non-placeholder for step10, is the concrete case the
+# per-step-registry discipline above exists for -- SS1.1's gating condition is what makes this side of
+# the flip true: these steps refuse to customize until step10 has genuinely executed and
+# PHASE_1_SPEC.md SS0 states the real count (see customize.py's find_step10_execution_artifacts).
+STEP11_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "[PROJECT_NAME]",
+        "[PROJECT_REPO_NAME]",
+        "[PROJECT]",
+        "[PROJECT_TAG]",
+        "[PHASE_COUNT]",
+    }
+)
+
+# [EXECUTOR]: same rule as step10 -- reject-pattern shorthand ("[EXECUTOR] may have written X --
+# reject"), never a placeholder.
+# [ ] (a single space): markdown checkbox markup, `[ ] item` bullets inside the "## TEMPLATE
+# CUSTOMIZATION CHECKLIST" section (SS3.3) -- matches the narrow token regex as a one-character token,
+# but it is list syntax, not a placeholder. Classified here independently of that section being
+# deleted wholesale (STEP11_SECTION_DELETIONS below), so find_unclassified_bracket_spans never depends
+# on section-deletion timing to stay complete.
+# [specified], [implemented instead], [reason], [wanted to do], [why the invariant prevents it]: A
+# DIFFERENT reason than [ ] or [EXECUTOR] above, despite sharing this set (SS1.2's table names the
+# distinction explicitly, worth stating rather than collapsing) -- these are output-FORMAT
+# placeholders inside the AUTONOMOUS CRITIQUE section's worked example ("1. [specified] ->
+# [implemented instead] -- [reason]"), filled by the STEP11-EXECUTING agent at runtime when it reports
+# its own critique, not by the customizer -- same underlying rule as step10's [RESEARCH FOCUS]
+# (runtime-derived, not customizer-knowable now), confirmed surviving byte-identical in the real
+# precedent (prompts/loopr/step11_build.md lines 105-109).
+STEP11_NON_PLACEHOLDER_BRACKET_TOKENS: frozenset[str] = frozenset(
+    {
+        "[EXECUTOR]",
+        "[ ]",
+        "[specified]",
+        "[implemented instead]",
+        "[reason]",
+        "[wanted to do]",
+        "[why the invariant prevents it]",
+    }
+)
+
+# [PROJECT_*] (SS7.2, the finding flagged at Phase 1's close): descriptive prose in the template's own
+# opening "TEMPLATE STATUS" paragraph ("Customization surfaces are marked [PROJECT_*] and
+# <<CUSTOMIZE: ...>>"), referencing a token PATTERN by example, not a literal token to resolve. Same
+# CATEGORY as [EXECUTOR] -- no resolution enforced, safe either surviving or edited away as part of
+# ordinary prose adaptation (confirmed: the real precedent, prompts/loopr/step11_build.md lines 3-5,
+# rewrites this whole paragraph and the reference doesn't survive, but nothing requires that) -- for a
+# DIFFERENT underlying reason (documentation about the template's own conventions, not agent-emitted
+# runtime output), worth naming per SS7.2 rather than conflating the two reasons. Lives in its own
+# registry, not *_NON_PLACEHOLDER_BRACKET_TOKENS, because it is WIDE-only: `*` falls outside
+# _BRACKET_TOKEN_RE's character class, so the narrow regex never finds it and it could never be
+# intersected against a frozenset of narrow-shaped tokens the way [EXECUTOR] is -- see
+# find_unclassified_bracket_spans, which checks this registry by prefix against the WIDE oracle
+# instead.
+STEP11_DOCUMENTATION_MARKERS: tuple[str, ...] = ("[PROJECT_*]",)
+
+STEP12_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "[PROJECT_NAME]",
+        "[PROJECT_REPO_NAME]",
+        "[PROJECT]",
+        "[PROJECT_TAG]",
+        "[PHASE_COUNT]",
+        "[EXECUTOR_AGENT_FICTION]",
+    }
+)
+
+# [EXECUTOR], [ ]: same reasons as STEP_11's entries above. step_12 has no AUTONOMOUS-CRITIQUE-style
+# worked-example tokens -- verified directly (its "## THE FIX" section has no bracket-token example
+# block); do not carry STEP_11's five-token sub-category over here, it would be unclassified noise.
+STEP12_NON_PLACEHOLDER_BRACKET_TOKENS: frozenset[str] = frozenset({"[EXECUTOR]", "[ ]"})
+
+STEP12_DOCUMENTATION_MARKERS: tuple[str, ...] = ("[PROJECT_*]",)
+
+# These are FUNCTIONS, not module-level dict constants, and deliberately so: they are rebuilt from
+# the live STEP<N>_* globals on every call, not snapshotted once at import time. A frozen dict built
+# at import time would silently break monkeypatch-based regression testing of the individual
+# registries (e.g. the carried-forward STEP10_FILL_IN_BLOCK_MARKERS regression test,
+# CUSTOMIZATION_PHASE_2_SPEC.md SS2) -- patching a STEP10_*/STEP11_*/STEP12_* constant would have no
+# effect on a dict entry that already copied its value before the patch ran. Rebuilding per call keeps
+# each registry independently, genuinely monkeypatchable, which is the whole point of testing them
+# that way.
+def _placeholder_allowlist_by_step() -> dict[CustomizationStep, frozenset[str]]:
+    return {
+        CustomizationStep.STEP_10: STEP10_PLACEHOLDER_ALLOWLIST,
+        CustomizationStep.STEP_11: STEP11_PLACEHOLDER_ALLOWLIST,
+        CustomizationStep.STEP_12: STEP12_PLACEHOLDER_ALLOWLIST,
+    }
+
+
+def _non_placeholder_bracket_tokens_by_step() -> dict[CustomizationStep, frozenset[str]]:
+    return {
+        CustomizationStep.STEP_10: NON_PLACEHOLDER_BRACKET_TOKENS,
+        CustomizationStep.STEP_11: STEP11_NON_PLACEHOLDER_BRACKET_TOKENS,
+        CustomizationStep.STEP_12: STEP12_NON_PLACEHOLDER_BRACKET_TOKENS,
+    }
+
+
+def _documentation_markers_by_step() -> dict[CustomizationStep, tuple[str, ...]]:
+    return {
+        CustomizationStep.STEP_10: (),
+        CustomizationStep.STEP_11: STEP11_DOCUMENTATION_MARKERS,
+        CustomizationStep.STEP_12: STEP12_DOCUMENTATION_MARKERS,
+    }
+
+
+def _fill_in_block_markers_by_step() -> dict[CustomizationStep, tuple[str, ...]]:
+    return {
+        CustomizationStep.STEP_10: STEP10_FILL_IN_BLOCK_MARKERS,
+        # STEP_11 / step_12 have no square-bracket fill-in block of their own -- verified: neither
+        # template contains a `[...]`-delimited multi-line instruction block the way STEP_10's hard
+        # boundary does. Their equivalent conditional content (the citation-gate blocks) uses
+        # `<<...>>` delimiters instead -- see CONDITIONAL_BLOCK_MARKERS below, a separate mechanism.
+        CustomizationStep.STEP_11: (),
+        CustomizationStep.STEP_12: (),
+    }
+
 
 def find_fill_in_blocks(text: str, step: CustomizationStep) -> list[str]:
-    """Returns the recognized multi-line fill-in blocks (STEP10_FILL_IN_BLOCK_MARKERS) actually
-    present in `text`, found via the wide-scan oracle since _BRACKET_TOKEN_RE cannot see them."""
-    if step != CustomizationStep.STEP_10:
-        raise NotImplementedError(
-            f"fill-in block inventory for {step.value} is Phase 2 work -- only step 10 is in scope"
-        )
+    """Returns the recognized multi-line fill-in blocks actually present in `text`, for this step,
+    found via the wide-scan oracle since _BRACKET_TOKEN_RE cannot see them. Empty for steps with no
+    registered marker (STEP11_FILL_IN_BLOCK_MARKERS/STEP12_FILL_IN_BLOCK_MARKERS are both empty)."""
+    markers = _fill_in_block_markers_by_step()[step]
     spans = set(_WIDE_BRACKET_SPAN_RE.findall(text))
-    return sorted(span for span in spans if span.startswith(STEP10_FILL_IN_BLOCK_MARKERS))
+    return sorted(span for span in spans if span.startswith(markers))
 
 
 def unresolved_fill_in_blocks(template_text: str, output_text: str, step: CustomizationStep) -> list[str]:
@@ -321,37 +474,33 @@ def unresolved_fill_in_blocks(template_text: str, output_text: str, step: Custom
 def find_unclassified_bracket_spans(text: str, step: CustomizationStep) -> list[str]:
     """The independent-oracle completeness check itself. Scans `text` with the WIDE, permissive
     regex and returns every span that is NEITHER one of this step's classified short tokens
-    (STEP10_PLACEHOLDER_ALLOWLIST | NON_PLACEHOLDER_BRACKET_TOKENS) NOR a recognized fill-in block
-    (STEP10_FILL_IN_BLOCK_MARKERS) -- i.e. genuinely unaccounted for by any classification mechanism
-    this module has. For the real STEP_10 file this returns an empty list: the hard-boundary block is
-    accounted for via the marker registry, and every short token is classified. Anything this DOES
-    return needs a human to classify it (add to the appropriate registry above), never silently
-    absorbed as "probably fine" either way -- that silent-absorption is exactly how the hard-boundary
-    block went undetected for four commits (b020ade through 1ccc8dd)."""
-    if step != CustomizationStep.STEP_10:
-        raise NotImplementedError(
-            f"bracket-span completeness check for {step.value} is Phase 2 work -- only step 10 is "
-            "in scope"
-        )
-    classified_short = STEP10_PLACEHOLDER_ALLOWLIST | NON_PLACEHOLDER_BRACKET_TOKENS
+    (allowlist | non-placeholder set) NOR a recognized fill-in block NOR a recognized documentation
+    marker -- i.e. genuinely unaccounted for by any classification mechanism this module has. For
+    every real template this returns an empty list once its registries are complete. Anything this
+    DOES return needs a human to classify it (add to the appropriate registry above), never silently
+    absorbed as "probably fine" either way -- that silent-absorption is exactly how STEP_10's
+    hard-boundary block went undetected for four commits (b020ade through 1ccc8dd)."""
+    classified_short = _placeholder_allowlist_by_step()[step] | _non_placeholder_bracket_tokens_by_step()[
+        step
+    ]
+    fill_in_markers = _fill_in_block_markers_by_step()[step]
+    documentation_markers = _documentation_markers_by_step()[step]
     spans = set(_WIDE_BRACKET_SPAN_RE.findall(text))
     return sorted(
         span
         for span in spans
-        if span not in classified_short and not span.startswith(STEP10_FILL_IN_BLOCK_MARKERS)
+        if span not in classified_short
+        and not span.startswith(fill_in_markers)
+        and not span.startswith(documentation_markers)
     )
 
 
 def inventory_placeholders(text: str, step: CustomizationStep) -> list[str]:
     """Returns the allowlisted placeholder tokens actually present in `text`, for this step. Tokens
-    matching the bracket shape but not on the allowlist (including [UNVERIFIED] and [EXECUTOR]) are
-    never returned here -- they are not placeholders and must never be treated as one."""
-    if step != CustomizationStep.STEP_10:
-        raise NotImplementedError(
-            f"placeholder inventory for {step.value} is Phase 2 work -- only step 10 is in scope"
-        )
+    matching the bracket shape but not on the allowlist (e.g. [UNVERIFIED], [EXECUTOR]) are never
+    returned here -- they are not placeholders and must never be treated as one."""
     found = set(_BRACKET_TOKEN_RE.findall(text))
-    return sorted(found & STEP10_PLACEHOLDER_ALLOWLIST)
+    return sorted(found & _placeholder_allowlist_by_step()[step])
 
 
 def unresolved_placeholders(text: str, step: CustomizationStep) -> list[str]:
@@ -363,5 +512,116 @@ def unresolved_placeholders(text: str, step: CustomizationStep) -> list[str]:
 
 def surviving_customize_markers(text: str) -> list[str]:
     """`<<CUSTOMIZE: ...>>` markers are instructions TO the customizer; they must never reach the
-    executing agent. Returns every such marker still present in `text`."""
-    return re.findall(r"<<CUSTOMIZE[^>]*>>", text)
+    executing agent. Returns every such marker still present in `text`. Step-agnostic -- the
+    `<<CUSTOMIZE...>>` convention is used identically in STEP_11 and step_12 (STEP_10 has none).
+
+    REGRESSION, found and fixed while building CONDITIONAL_BLOCK_MARKERS (CUSTOMIZATION_PHASE_2_SPEC
+    .md SS3.4) -- confirmed as a real, pre-existing defect, not hypothetical: the previous pattern
+    (`[^>]*`, a `>`-excluding class, same shape as _WIDE_ANGLE_SPAN_RE's original bug) could not cross
+    the literal `>` characters in STEP_11/step_12's HARD BOUNDARY block's own "->" arrow notation
+    ("client demo -> the customer's core IP...") -- it silently found ZERO markers for that block in
+    either template, meaning a customization that shipped the HARD BOUNDARY section completely
+    unfilled (the template's own generic per-project-kind examples verbatim) would have
+    passed layer 1 undetected. This was never exercised in Phase 1, which only ever tested this
+    function against STEP_10 (zero CUSTOMIZE markers) and short synthetic fixtures with no "->"
+    content. Fixed the same way as _WIDE_ANGLE_SPAN_RE: lazy match to the first literal `>>`, not a
+    `[^<>]`-style exclusion."""
+    return re.findall(r"<<CUSTOMIZE.{0,8000}?>>", text, re.DOTALL)
+
+
+# Section deletion (CUSTOMIZATION_PHASE_2_SPEC.md SS3.3) -- new in Phase 2: both STEP_11 and step_12
+# end in a "## TEMPLATE CUSTOMIZATION CHECKLIST" section whose own text instructs "remove before
+# pasting to Claude Code." This is scaffolding for the human who customizes by hand, not a fill
+# target -- the customized OUTPUT must not contain it at all, and the skeleton-equality check Phase 1
+# used is now wrong as written (it would reject every genuinely correct step11/step12 customization
+# for "missing" a section that is SUPPOSED to be gone). Matched by SUBSTRING against the extracted
+# skeleton's section strings, not the full exact line -- verified directly against both real files:
+# the parenthetical wording differs ("for the project web chat -- remove before..." in STEP_11 vs.
+# "remove before..." in step_12) without changing what section it is.
+STEP11_SECTION_DELETIONS: tuple[str, ...] = ("TEMPLATE CUSTOMIZATION CHECKLIST",)
+STEP12_SECTION_DELETIONS: tuple[str, ...] = ("TEMPLATE CUSTOMIZATION CHECKLIST",)
+
+def _section_deletions_by_step() -> dict[CustomizationStep, tuple[str, ...]]:
+    return {
+        CustomizationStep.STEP_10: (),
+        CustomizationStep.STEP_11: STEP11_SECTION_DELETIONS,
+        CustomizationStep.STEP_12: STEP12_SECTION_DELETIONS,
+    }
+
+
+def expected_output_sections(template_sections: list[str], step: CustomizationStep) -> list[str]:
+    """The section list a genuinely fidelity-passing output must match: the template's own skeleton
+    MINUS every section matching a declared SECTION_DELETIONS marker for this step (SS3.3). Returns
+    the template's sections unchanged for steps with nothing declared (step10 -- no deletions there).
+    A section is deleted if any registered marker is a SUBSTRING of it, not an exact-line match (see
+    the registry comment above for why). This subtraction must stay exact, not loose: any section NOT
+    matching a declared marker is still required, so a customization dropping a real section is still
+    rejected -- verify the delta, don't just relax the equality (SS3.3's own warning)."""
+    markers = _section_deletions_by_step()[step]
+    if not markers:
+        return template_sections
+    return [section for section in template_sections if not any(marker in section for marker in markers)]
+
+
+# Conditional include-or-replace (CUSTOMIZATION_PHASE_2_SPEC.md SS3.4) -- new in Phase 2:
+# <<CITATION_GATE_INGESTION_BLOCK: ...>> (STEP_11) and <<CITATION_GATE_BLOCK: ...>> (step_12) are
+# neither fill targets nor unconditional deletions -- include verbatim if the project has
+# load-bearing arXiv citations, otherwise resolve per EACH TEMPLATE'S OWN stated fallback. Verified
+# directly against both real files, and the two are NOT symmetric -- do not assume they are:
+#   - step_12's block states an exact single-line replacement ("If not applicable, replace with:
+#     'No citation re-verification gate required for this project.'"). Even so, the real,
+#     human-produced precedent (prompts/loopr/step12_review.md line 151) does not use that line
+#     byte-for-byte -- it opens with it, then adds genuine project-specific reasoning after it.
+#   - STEP_11's block says only "Otherwise remove this block" -- no replacement text is specified at
+#     all (there is no "replace with: ..." clause in STEP_11's version, unlike step_12's). The real
+#     precedent (prompts/loopr/step11_build.md lines 46-48) replaces it with a bespoke
+#     project-specific statement, not any fixed line, because none exists to copy.
+# CONSEQUENCE: layer 1 can only reliably verify the raw marker doesn't survive verbatim (same
+# sentinel mechanism as fill-in blocks, different delimiter) -- it cannot mandate byte-exact
+# replacement text for EITHER step without rejecting the real, legitimate precedent for both. Whether
+# the replacement content is genuinely appropriate (real citation content when included; real
+# reasoning, not generic filler, when not) is a layer-2 judgment, exactly as SS3.4 says: "this is a
+# judgment call, not a structural one."
+STEP11_CONDITIONAL_BLOCK_MARKERS: tuple[str, ...] = ("<<CITATION_GATE_INGESTION_BLOCK",)
+STEP12_CONDITIONAL_BLOCK_MARKERS: tuple[str, ...] = ("<<CITATION_GATE_BLOCK",)
+
+def _conditional_block_markers_by_step() -> dict[CustomizationStep, tuple[str, ...]]:
+    return {
+        CustomizationStep.STEP_10: (),
+        CustomizationStep.STEP_11: STEP11_CONDITIONAL_BLOCK_MARKERS,
+        CustomizationStep.STEP_12: STEP12_CONDITIONAL_BLOCK_MARKERS,
+    }
+
+
+# The angle-bracket analogue of _WIDE_BRACKET_SPAN_RE -- same independent-oracle discipline and
+# DOTALL/bounded shape, different delimiter, and NOT a non-nested character-class exclusion the way
+# the square-bracket version is. Verified directly against step_12's real CITATION_GATE_BLOCK
+# (confirmed a real bug, not a hypothetical): its own body text contains single `>` characters as
+# "->" arrow notation ("PASS -> add a SS0.5 ...", twice), which a `[^<>]`-style exclusion cannot
+# cross -- it would truncate the match at the first "->" and never reach the block's real closing
+# `>>`, silently returning zero blocks found for step_12's FULL instructional form (the bare
+# `<<CITATION_GATE_BLOCK>>` inside the checklist, which has no internal `>`, matched fine and masked
+# the miss until tested against the real file with a real judge-drafted "include" resolution). A
+# LAZY match to the FIRST literal `>>` is correct here instead: STEP_11/step_12 have exactly one
+# genuine `>>` closing per block (verified), so the first one found is always the real one.
+_WIDE_ANGLE_SPAN_RE = re.compile(r"<<.{1,8000}?>>", re.DOTALL)
+
+
+def find_conditional_blocks(text: str, step: CustomizationStep) -> list[str]:
+    """Returns the recognized conditional include-or-replace blocks (SS3.4) actually present in
+    `text` for this step. Mirrors find_fill_in_blocks exactly (same sentinel-based design) but scans
+    `<<...>>` spans instead of `[...]` spans, since these markers use angle brackets."""
+    markers = _conditional_block_markers_by_step()[step]
+    spans = set(_WIDE_ANGLE_SPAN_RE.findall(text))
+    return sorted(span for span in spans if span.startswith(markers))
+
+
+def unresolved_conditional_blocks(
+    template_text: str, output_text: str, step: CustomizationStep
+) -> list[str]:
+    """Mirrors unresolved_fill_in_blocks exactly, for conditional blocks: the template's own
+    original block text is the sentinel -- still present byte-identical in the output means the
+    customizer never resolved the include-or-replace decision at all, regardless of which way it
+    should have gone."""
+    blocks = find_conditional_blocks(template_text, step)
+    return [block for block in blocks if block in output_text]

@@ -92,13 +92,74 @@ ALLOWED_INPUTS_V3: Mapping[JudgeCallType, frozenset[str]] = {
     ),
 }
 
+# v4 (2026-08-03): adds step11/step12's customization + fidelity pairs (CUSTOMIZATION_PHASE_2_SPEC.md
+# SS2). STEP11_CUSTOMIZATION/STEP12_CUSTOMIZATION's input set is STEP10_CUSTOMIZATION's set plus one
+# new field, `phase_1_spec_text` -- step10's own §1.1 gating condition guarantees this file exists and
+# is real by the time these calls are ever made, and the judge needs its content to resolve
+# [PHASE_COUNT] (SS1.2: "PHASE_1_SPEC.md SS0's phase plan header states it once step10 has run") and
+# the PRD-section-reference <<CUSTOMIZE: ...>> marker. Disclosed scope decision: the modernised PRD's
+# own full text is deliberately NOT included here -- no acceptance criterion in
+# CUSTOMIZATION_PHASE_2_SPEC.md SS5 requires it, and its filename is genuinely variable (loopr's own
+# real customization uses "loopr-PRD.md", not the template's stated default "ULTIMATE_PRD.md" --
+# verified against prompts/loopr/step10_prd_modernization.md), unlike PHASE_1_SPEC.md's fixed name.
+# The judge resolves the PRD-section-reference marker from the confirmed spec fields available to it
+# without the PRD's literal text, same as it already resolves everything else it cannot see directly.
+# STEP11_FIDELITY_JUDGE/STEP12_FIDELITY_JUDGE mirror STEP10_FIDELITY_JUDGE's set exactly -- layer 2
+# judges genuineness of what was already drafted, it does not need phase_1_spec_text to do that.
+ALLOWED_INPUTS_V4: Mapping[JudgeCallType, frozenset[str]] = {
+    **ALLOWED_INPUTS_V3,
+    JudgeCallType.STEP11_CUSTOMIZATION: frozenset(
+        {
+            "template_text",
+            "phase_1_spec_text",
+            "problem_statement",
+            "acceptance_criteria",
+            "scope_edges",
+            "boundary",
+            "context_notes",
+            "conformance_summary",
+        }
+    ),
+    JudgeCallType.STEP11_FIDELITY_JUDGE: frozenset(
+        {
+            "template_text",
+            "customized_text",
+            "problem_statement",
+            "acceptance_criteria",
+            "boundary",
+        }
+    ),
+    JudgeCallType.STEP12_CUSTOMIZATION: frozenset(
+        {
+            "template_text",
+            "phase_1_spec_text",
+            "problem_statement",
+            "acceptance_criteria",
+            "scope_edges",
+            "boundary",
+            "context_notes",
+            "conformance_summary",
+        }
+    ),
+    JudgeCallType.STEP12_FIDELITY_JUDGE: frozenset(
+        {
+            "template_text",
+            "customized_text",
+            "problem_statement",
+            "acceptance_criteria",
+            "boundary",
+        }
+    ),
+}
+
 ALLOWED_INPUTS_BY_VERSION: Mapping[int, Mapping[JudgeCallType, frozenset[str]]] = {
     1: ALLOWED_INPUTS_V1,
     2: ALLOWED_INPUTS_V2,
     3: ALLOWED_INPUTS_V3,
+    4: ALLOWED_INPUTS_V4,
 }
 
-CURRENT_ENVELOPE_VERSION = 3
+CURRENT_ENVELOPE_VERSION = 4
 
 # The live scope, for callers building NEW requests (checks/conditions.py, tests). Always the
 # highest entry in ALLOWED_INPUTS_BY_VERSION -- kept as a top-level name for backward compatibility.

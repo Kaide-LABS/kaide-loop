@@ -89,24 +89,30 @@ loopr emit --state <target>/.loopr-state/state.json
 Renders `baby_prd.md`, `context.md`, and (brownfield) `conformance-ledger.md` to
 `<target>/.claude/loopr/`. Refuses unless all six conditions genuinely pass -- never emit early.
 
-### 4. Customize step 10 (optional, once COMPLETE)
+### 4. Customize step 10, step 11, step 12 (optional, once COMPLETE)
 
 ```
 loopr customize --state <target>/.loopr-state/state.json --step 10
+loopr customize --state <target>/.loopr-state/state.json --step 11
+loopr customize --state <target>/.loopr-state/state.json --step 12
 ```
 
-Produces a genuinely customized `step10` prompt from the confirmed artifacts -- not a template with
-placeholders merely deleted -- and delivers it as a dispatchable subagent,
-`<target>/.claude/agents/loopr-step10.md`, pinned to an Opus-class model. Handle exit codes the same
-way as `step`: `10` `JUDGE_REQUIRED` (answer the customization or fidelity-judgment call honestly,
-same discipline as any other judge call, then re-invoke with `--judge-response`), `0` `OK` (done --
-the subagent file is at the printed path, ready to dispatch), `40` `HALT` (the fidelity check
-rejected the customization -- a restructured template or generic filler; this is a real failure,
-never silently retried, and nothing is ever written to `.claude/agents/` until it's cleared). Session
-topology never matters here: this reads only the state file and confirmed artifacts, so whether
-you're the same session that ran the interrogation or a fresh one makes no difference to the result.
-`--step 11`/`--step 12` and driving the phase loop itself are not yet built -- only step 10
-customization exists so far.
+Produces a genuinely customized prompt from the confirmed artifacts -- not a template with
+placeholders merely deleted -- and delivers it as a dispatchable subagent:
+`<target>/.claude/agents/loopr-step10.md` (Opus), `loopr-step11.md` (Sonnet, low effort),
+`loopr-step12.md` (Sonnet, high effort). Handle exit codes the same way as `step`: `10`
+`JUDGE_REQUIRED` (answer the customization or fidelity-judgment call honestly, same discipline as any
+other judge call, then re-invoke with `--judge-response`), `0` `OK` (done -- the subagent file is at
+the printed path, ready to dispatch), `40` `HALT` (the fidelity check rejected the customization, or
+-- step11/step12 only -- step10 has not actually *executed* against this project yet: a
+fidelity-passing step10 prompt is not the same as having run it, so its real deliverables, a
+modernised PRD and `PHASE_1_SPEC.md`, must already exist on disk. A restructured template or generic
+filler is likewise a real failure, never silently retried; nothing is ever written to
+`.claude/agents/` until it's cleared). step11 and step12 don't depend on each other -- customize
+either first, or in parallel. Session topology never matters here: this reads only the state file and
+confirmed artifacts, so whether you're the same session that ran the interrogation or a fresh one
+makes no difference to the result. Driving the phase loop itself (deciding when to dispatch a
+customized subagent) is not yet built -- only customization of all three prompts exists so far.
 
 ### Optional: verify reproducibility
 

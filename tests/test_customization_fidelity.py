@@ -303,3 +303,146 @@ def test_apply_judge_layer_requires_structural_pass_first() -> None:
 def test_fidelity_result_two_layer_invariant_rejects_overall_true_without_judge_pass() -> None:
     with pytest.raises(ValueError):
         FidelityResult(structural_pass=True, judge_pass=None, overall=True, detail="bad")
+
+
+# ============================================================================
+# CUSTOMIZATION_PHASE_2_SPEC.md -- step11/step12 fidelity, against the REAL templates AND real,
+# human-produced precedent (prompts/loopr/step11_build.md, step12_review.md), not synthetic
+# fixtures. The precedent files predate CUSTOMIZATION_PHASE_2_SPEC.md's SS1.1 gate (they were
+# customized before this project's own step10 execution existed to read PHASE_COUNT from), so
+# [PHASE_COUNT] is the one thing left unresolved in each -- confirmed structurally below, then
+# patched to build a genuinely fully-passing fixture.
+# ============================================================================
+
+_REAL_LOOPR_DIR = REAL_TEMPLATES_DIR.parents[1] / "prompts" / "loopr"
+_STEP11_TEMPLATE_TEXT = (REAL_TEMPLATES_DIR / "STEP _11").read_text(encoding="utf-8")
+_STEP12_TEMPLATE_TEXT = (REAL_TEMPLATES_DIR / "step_12").read_text(encoding="utf-8")
+
+
+def _step11_good_customization() -> str:
+    """The real precedent, with its one known gap (PHASE_COUNT, unresolved because it predates the
+    SS1.1 gate) patched -- everything else in it is genuine, human-produced resolution."""
+    return (_REAL_LOOPR_DIR / "step11_build.md").read_text(encoding="utf-8").replace(
+        "[PHASE_COUNT]", "4"
+    )
+
+
+def _step12_good_customization() -> str:
+    return (_REAL_LOOPR_DIR / "step12_review.md").read_text(encoding="utf-8").replace(
+        "[PHASE_COUNT]", "4"
+    )
+
+
+def test_step11_real_precedent_has_exactly_one_gap_before_patching() -> None:
+    """Sanity check on the fixture itself: confirms the ONLY reason the raw precedent fails
+    structural fidelity is the known, explained PHASE_COUNT gap -- not some other unrelated defect
+    that would silently invalidate every test built on top of the patched version below."""
+    raw_output = (_REAL_LOOPR_DIR / "step11_build.md").read_text(encoding="utf-8")
+    template_skeleton = extract_skeleton(_STEP11_TEMPLATE_TEXT, CustomizationStep.STEP_11)
+    output_skeleton = extract_skeleton(raw_output, CustomizationStep.STEP_11)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, _STEP11_TEMPLATE_TEXT, raw_output, CustomizationStep.STEP_11
+    )
+    assert result.structural_pass is False
+    assert "PHASE_COUNT" in result.detail
+
+
+def test_step11_genuine_customization_of_real_template_passes_layer1() -> None:
+    output = _step11_good_customization()
+    template_skeleton = extract_skeleton(_STEP11_TEMPLATE_TEXT, CustomizationStep.STEP_11)
+    output_skeleton = extract_skeleton(output, CustomizationStep.STEP_11)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, _STEP11_TEMPLATE_TEXT, output, CustomizationStep.STEP_11
+    )
+    assert result.structural_pass is True
+    assert result.overall is False  # awaiting layer 2
+
+
+def test_step12_genuine_customization_of_real_template_passes_layer1() -> None:
+    output = _step12_good_customization()
+    template_skeleton = extract_skeleton(_STEP12_TEMPLATE_TEXT, CustomizationStep.STEP_12)
+    output_skeleton = extract_skeleton(output, CustomizationStep.STEP_12)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, _STEP12_TEMPLATE_TEXT, output, CustomizationStep.STEP_12
+    )
+    assert result.structural_pass is True
+    assert result.overall is False
+
+
+def test_step11_leaving_checklist_in_output_is_rejected() -> None:
+    """CUSTOMIZATION_PHASE_2_SPEC.md SS5.4, demonstrated firing: a customization that otherwise
+    resolves everything correctly, but leaves the TEMPLATE CUSTOMIZATION CHECKLIST section in the
+    output, must be rejected by the corrected skeleton check."""
+    output = _step11_good_customization() + "\n" + (
+        "## TEMPLATE CUSTOMIZATION CHECKLIST (for the project web chat -- remove before pasting to "
+        "Claude Code)\n\n[ ] left in by mistake\n"
+    )
+    template_skeleton = extract_skeleton(_STEP11_TEMPLATE_TEXT, CustomizationStep.STEP_11)
+    output_skeleton = extract_skeleton(output, CustomizationStep.STEP_11)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, _STEP11_TEMPLATE_TEXT, output, CustomizationStep.STEP_11
+    )
+    assert result.structural_pass is False
+    assert "TEMPLATE CUSTOMIZATION CHECKLIST" in result.detail
+
+
+def test_step12_leaving_checklist_in_output_is_rejected() -> None:
+    output = _step12_good_customization() + "\n" + (
+        "## TEMPLATE CUSTOMIZATION CHECKLIST (remove before pasting to Claude Code)\n\n"
+        "[ ] left in by mistake\n"
+    )
+    template_skeleton = extract_skeleton(_STEP12_TEMPLATE_TEXT, CustomizationStep.STEP_12)
+    output_skeleton = extract_skeleton(output, CustomizationStep.STEP_12)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, _STEP12_TEMPLATE_TEXT, output, CustomizationStep.STEP_12
+    )
+    assert result.structural_pass is False
+    assert "TEMPLATE CUSTOMIZATION CHECKLIST" in result.detail
+
+
+def test_step11_dropping_a_real_section_is_still_rejected() -> None:
+    """CUSTOMIZATION_PHASE_2_SPEC.md SS5.5: confirms SS3.3's subtraction didn't accidentally loosen
+    the check for everything else -- dropping a genuine section (not the checklist) must still fail,
+    demonstrated against the real template rather than asserted."""
+    lines = _step11_good_customization().splitlines()
+    dropped_index = next(i for i, line in enumerate(lines) if line.strip() == "## SECRETS DISCIPLINE")
+    output = "\n".join(lines[:dropped_index] + lines[dropped_index + 1 :])
+
+    template_skeleton = extract_skeleton(_STEP11_TEMPLATE_TEXT, CustomizationStep.STEP_11)
+    output_skeleton = extract_skeleton(output, CustomizationStep.STEP_11)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, _STEP11_TEMPLATE_TEXT, output, CustomizationStep.STEP_11
+    )
+    assert result.structural_pass is False
+    assert "SECRETS DISCIPLINE" in result.detail
+    assert "TEMPLATE CUSTOMIZATION CHECKLIST" not in result.detail  # not the deletion this test is about
+
+
+def test_step12_dropping_a_real_section_is_still_rejected() -> None:
+    lines = _step12_good_customization().splitlines()
+    dropped_index = next(i for i, line in enumerate(lines) if line.strip() == "## PHASE APPROVAL")
+    output = "\n".join(lines[:dropped_index] + lines[dropped_index + 1 :])
+
+    template_skeleton = extract_skeleton(_STEP12_TEMPLATE_TEXT, CustomizationStep.STEP_12)
+    output_skeleton = extract_skeleton(output, CustomizationStep.STEP_12)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, _STEP12_TEMPLATE_TEXT, output, CustomizationStep.STEP_12
+    )
+    assert result.structural_pass is False
+    assert "PHASE APPROVAL" in result.detail
+
+
+def test_step11_step12_genuine_customizations_pass_layer2_with_a_supportive_judge() -> None:
+    """Layer 1 passing is not layer 2 passing -- confirms apply_judge_layer still gates overall on
+    both, exactly as step10's own two-layer discipline requires."""
+    for template_text, output_text_fn, step in (
+        (_STEP11_TEMPLATE_TEXT, _step11_good_customization, CustomizationStep.STEP_11),
+        (_STEP12_TEMPLATE_TEXT, _step12_good_customization, CustomizationStep.STEP_12),
+    ):
+        output = output_text_fn()
+        template_skeleton = extract_skeleton(template_text, step)
+        output_skeleton = extract_skeleton(output, step)
+        structural = check_fidelity(template_skeleton, output_skeleton, template_text, output, step)
+        assert structural.structural_pass is True
+        final = apply_judge_layer(structural, judge_passed=True, judge_reason="genuinely specific")
+        assert final.overall is True

@@ -8,7 +8,9 @@ customization output: layer 1 (this module) is deterministic, pure code, no mode
 from __future__ import annotations
 
 from loopr.customization.templates import (
+    expected_output_sections,
     surviving_customize_markers,
+    unresolved_conditional_blocks,
     unresolved_fill_in_blocks,
     unresolved_placeholders,
 )
@@ -23,19 +25,25 @@ def check_structural_fidelity(
     output_text: str,
     step: CustomizationStep,
 ) -> FidelityResult:
-    """Layer 1. Fails structurally if: a section header from the template is missing; headers
-    appear in a different order; any allowlisted placeholder token remains unresolved; a multi-line
-    fill-in instruction block (found via the independent wide-scan oracle, SS4.3 decided 2026-08-03 --
-    e.g. STEP_10's `[PROJECT HARD BOUNDARY ...]`) survives byte-identical from the template; or a
-    `<<CUSTOMIZE: ...>>` marker survives into the output. Never sets overall=True on its own -- that
-    requires layer 2 (STEP10_FIDELITY_JUDGE) to also pass."""
-    if template_skeleton.sections != output_skeleton.sections:
-        missing = [s for s in template_skeleton.sections if s not in output_skeleton.sections]
-        extra = [s for s in output_skeleton.sections if s not in template_skeleton.sections]
+    """Layer 1. Fails structurally if: a section header from the template is missing (after
+    subtracting any section this step declares for deletion, CUSTOMIZATION_PHASE_2_SPEC.md SS3.3 --
+    e.g. step11/step12's "## TEMPLATE CUSTOMIZATION CHECKLIST"); headers appear in a different order;
+    any allowlisted placeholder token remains unresolved; a multi-line fill-in instruction block
+    (found via the independent wide-scan oracle -- e.g. STEP_10's `[PROJECT HARD BOUNDARY ...]`)
+    survives byte-identical from the template; a conditional include-or-replace block (SS3.4 -- e.g.
+    step11/step12's citation-gate blocks) survives byte-identical, meaning the include/replace
+    decision was never actually made; or a `<<CUSTOMIZE: ...>>` marker survives into the output.
+    Never sets overall=True on its own -- that requires layer 2 (the step's *_FIDELITY_JUDGE call) to
+    also pass."""
+    expected_sections = expected_output_sections(template_skeleton.sections, step)
+    if expected_sections != output_skeleton.sections:
+        missing = [s for s in expected_sections if s not in output_skeleton.sections]
+        extra = [s for s in output_skeleton.sections if s not in expected_sections]
         detail = (
-            f"section skeleton mismatch -- template has {template_skeleton.sections}, output has "
-            f"{output_skeleton.sections} (missing={missing}, unexpected={extra}); every section "
-            "must be preserved, in the same order -- fill and adapt, never restructure"
+            f"section skeleton mismatch -- expected {expected_sections} (template skeleton minus any "
+            f"declared section deletions), output has {output_skeleton.sections} (missing={missing}, "
+            f"unexpected={extra}); every section must be preserved, in the same order, except sections "
+            "this step declares for deletion -- fill and adapt, never restructure"
         )
         return FidelityResult(structural_pass=False, judge_pass=None, overall=False, detail=detail)
 
@@ -59,6 +67,19 @@ def check_structural_fidelity(
                 f"{unfilled_blocks!r} -- these are project-specific instructions (e.g. the hard "
                 "boundary) that must be replaced with real content, not left as the template's own "
                 "placeholder text"
+            ),
+        )
+
+    unresolved_conditionals = unresolved_conditional_blocks(template_text, output_text, step)
+    if unresolved_conditionals:
+        return FidelityResult(
+            structural_pass=False,
+            judge_pass=None,
+            overall=False,
+            detail=(
+                "conditional include-or-replace block(s) survived byte-identical from the template: "
+                f"{unresolved_conditionals!r} -- the include/replace decision (e.g. the citation-gate "
+                "block) was never actually made, not resolved either way"
             ),
         )
 

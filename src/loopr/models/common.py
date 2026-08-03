@@ -55,6 +55,17 @@ class JudgeCallType(str, Enum):
     exactly-one-of-four shape means a single response can carry drafted_text (the customization) OR
     passed (the genuineness judgment), never both -- two structurally different response shapes
     cannot share one call type under the existing schema. Disclosed deviation, not silent."""
+    STEP11_CUSTOMIZATION = "step11_customization"
+    STEP11_FIDELITY_JUDGE = "step11_fidelity_judge"
+    STEP12_CUSTOMIZATION = "step12_customization"
+    STEP12_FIDELITY_JUDGE = "step12_fidelity_judge"
+    """CUSTOMIZATION_PHASE_2_SPEC.md SS2: step11 and step12 each need their own customization +
+    fidelity pair, same shape as step10's -- four new types, not two. Both response shapes are
+    unchanged from step10's (drafted_text / passed via the existing exactly-one-of validator);
+    the four operation types SS3 describes (fill, multi-line fill-in block, section deletion,
+    conditional include-or-replace) are all resolved within ONE holistic drafted_text response per
+    call, exactly as step10's fill and fill-in-block resolution already are -- no new JudgeResponse
+    field or shape was needed."""
 
 
 class QuestionStatus(str, Enum):
