@@ -180,6 +180,37 @@ regression test asserting `[UNVERIFIED]` and `[EXECUTOR]` survive customization 
 and `step_12` — inconsistent casing, an embedded space, no extensions. Discovery must handle these
 as they are, or normalize explicitly; a tidy glob pattern will silently miss `STEP _11`.
 
+**Third trap, and the most consequential one found in Phase 1: multi-line, punctuation-bearing
+fill-in blocks are invisible to a token-shaped regex entirely. [ADDED 2026-08-03]** `STEP_10` §3
+contains `[PROJECT HARD BOUNDARY -- fill per project: …]` — a 303-character, 5-line block with
+hyphens, colons, slashes, parentheses, and newlines. A placeholder regex built for short tokens
+(`[A-Za-z0-9 _]` only, single-line) cannot match it at all — not "doesn't match, reports it", simply
+never sees it. Left unclassified, layer 1 would pass a customization that ships this block completely
+unfilled: the template's own generic examples in place of the project's actual inviolable constraint,
+in the single field STEP_10 itself calls the one "the review agent can grep for it and HALT" on.
+Undetected across four commits (b020ade through 1ccc8dd) before being found.
+
+Two consequences: (1) the placeholder-discovery mechanism needs a WIDE scan (multi-line, tolerant of
+punctuation) as well as the narrow one, not just a bigger allowlist; (2) "resolved" for a block like
+this cannot mean "token absent" the way it does for `[PROJECT_NAME]` — a genuine resolution replaces
+it with several sentences of prose, not a short value. The template's own original block text is the
+sentinel: a customization where that exact text still appears verbatim never touched it.
+
+**Standing rule this trap forces, and it applies beyond this one token [ADDED 2026-08-03]: any
+completeness or fidelity check must use a mechanism INDEPENDENT of the one it verifies.** A
+completeness check that asks "did the narrow regex find anything it didn't classify?" — checking the
+narrow regex's own output against itself — certifies itself; it is structurally blind to anything
+that regex's character class cannot match in the first place, which is exactly how this trap slipped
+past both the original placeholder allowlist AND a first-draft completeness test built the same way.
+Concretely: a wide, permissive scan (any `[...]` span, multi-line, punctuation-tolerant, bounded only
+against runaway matches) is the ORACLE for what bracket-shaped constructs exist in a template. The
+narrow, short-token classification is checked AGAINST that oracle's output, never the reverse. Any
+span the wide scan finds that neither the short-token sets nor an explicit, reviewed registry of
+known multi-line blocks accounts for must fail loudly as unclassified — never silently treated as
+"probably fine" by a check that can't see it. This is the same lesson the gap-analysis mechanism in
+§4.3 below already encodes for section headers (built deliberately not sharing code with the
+header regexes it cross-checks); this trap is that same lesson recurring on the token side.
+
 ### 4.3 Two-layer fidelity check — the same discipline loopr applies to itself
 
 "Customized properly" was the vague part of the confirmed criterion. It is made checkable by
@@ -273,6 +304,8 @@ Given a non-vacuous skeleton, the customized output **fails structurally** if an
 - a section header from the template is missing;
 - headers appear in a different order;
 - any allowlisted placeholder token remains unresolved;
+- a recognized multi-line fill-in block (§4.2's third trap — e.g. the hard-boundary block) survives
+  byte-identical from the template, found via the independent wide-scan oracle;
 - a `<<CUSTOMIZE: …>>` marker survives into the output (it is an instruction to the customizer, and
   must never reach the executing agent).
 

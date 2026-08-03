@@ -12,16 +12,18 @@ from pathlib import Path
 import pytest
 
 from loopr.customization.templates import (
-    _BRACKET_TOKEN_RE,
     NON_PLACEHOLDER_BRACKET_TOKENS,
     STEP10_PLACEHOLDER_ALLOWLIST,
     TemplateDiscoveryError,
     VacuousSkeletonError,
     discover_template,
     extract_skeleton,
+    find_fill_in_blocks,
     find_gap_candidates,
+    find_unclassified_bracket_spans,
     inventory_placeholders,
     surviving_customize_markers,
+    unresolved_fill_in_blocks,
 )
 from loopr.models.common import CustomizationStep
 
@@ -176,40 +178,87 @@ def test_step10_real_file_phase_count_occurrence_is_not_a_placeholder() -> None:
 
 
 def test_step10_bracket_token_classification_is_complete() -> None:
-    """The load-bearing completeness check: every distinct bracket-shaped token actually present in
-    the real STEP_10 file must be classified by EITHER STEP10_PLACEHOLDER_ALLOWLIST OR
-    NON_PLACEHOLDER_BRACKET_TOKENS -- never neither. A token in neither set is not harmlessly
-    ignored, it is UNCLASSIFIED, and inventory_placeholders would silently treat it as "not a
-    placeholder" without anyone having actually decided that. This is what would have caught both
-    [RESEARCH FOCUS] and [PHASE_COUNT] before they shipped as misclassified in the OTHER direction
-    (wrongly allowlisted) -- this check catches the missing-classification shape of the same defect
-    class, and the two sets being disjoint is asserted as a sanity companion."""
+    """The load-bearing completeness check, INDEPENDENT-ORACLE version (CUSTOMIZATION_PHASE_1_SPEC.md
+    SS4.3, decided 2026-08-03). The prior version of this test checked _BRACKET_TOKEN_RE's own output
+    against itself -- a self-referential check that certifies itself and is structurally blind to
+    anything that regex's narrow character class cannot see. It cannot detect a token unclassified
+    for want of the *narrow regex never matching it in the first place*, which is exactly what
+    happened with STEP_10's multi-line `[PROJECT HARD BOUNDARY ...]` block (SS3): invisible to
+    _BRACKET_TOKEN_RE (no DOTALL, character class excludes `-`, `:`, `/`, `(`), so it never appeared
+    in `found` for the old test to even consider.
+
+    `find_unclassified_bracket_spans` is the fix: it scans with the WIDE, permissive oracle
+    (`_WIDE_BRACKET_SPAN_RE`, DOTALL, tolerant of any character except `[`/`]`) and returns whatever
+    that oracle finds that is NEITHER a classified short token NOR a recognized fill-in block
+    (STEP10_FILL_IN_BLOCK_MARKERS). A genuinely complete classification returns nothing -- if
+    anything survives, it is UNCLASSIFIED, never silently absorbed either way, and needs a human to
+    add it to the appropriate registry in templates.py."""
     text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
-    found = set(_BRACKET_TOKEN_RE.findall(text))
-    classified = STEP10_PLACEHOLDER_ALLOWLIST | NON_PLACEHOLDER_BRACKET_TOKENS
-    unclassified = found - classified
-    assert unclassified == set(), (
-        f"bracket token(s) found in the real STEP_10 file with no classification in either "
-        f"STEP10_PLACEHOLDER_ALLOWLIST or NON_PLACEHOLDER_BRACKET_TOKENS: {sorted(unclassified)} -- "
-        "classify each per the rule documented in templates.py before this can pass"
+    unclassified = find_unclassified_bracket_spans(text, CustomizationStep.STEP_10)
+    assert unclassified == [], (
+        f"bracket span(s) found in the real STEP_10 file by the wide oracle with no classification: "
+        f"{unclassified} -- classify each per the rule documented in templates.py before this can "
+        "pass (a short token, or a recognized fill-in block via STEP10_FILL_IN_BLOCK_MARKERS)"
     )
     assert STEP10_PLACEHOLDER_ALLOWLIST & NON_PLACEHOLDER_BRACKET_TOKENS == set(), (
         "a token cannot be both customizer-resolvable and runtime-derived for the same step"
     )
 
 
-def test_completeness_check_fails_when_a_real_token_is_unclassified() -> None:
-    """Demonstrates the completeness check firing for real, not merely existing: reproduce the exact
-    shape of the [RESEARCH FOCUS]/[PHASE_COUNT] miss by removing a real token from BOTH sets and
-    confirming the same set-difference logic test_step10_bracket_token_classification_is_complete
-    uses actually detects it, rather than silently passing on an incomplete classification."""
+def test_hard_boundary_block_is_the_one_span_the_narrow_regex_cannot_see() -> None:
+    """Confirms the defect's exact shape against the real file: comparing the WIDE oracle's raw
+    output directly against the NARROW token regex's raw output (not the final, marker-aware
+    classification -- that's test_step10_bracket_token_classification_is_complete's job) shows
+    exactly one span the narrow regex cannot see at all, and it is the hard-boundary block."""
+    from loopr.customization.templates import _BRACKET_TOKEN_RE, _WIDE_BRACKET_SPAN_RE
+
     text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
-    found = set(_BRACKET_TOKEN_RE.findall(text))
-    crippled_classified = (STEP10_PLACEHOLDER_ALLOWLIST | NON_PLACEHOLDER_BRACKET_TOKENS) - {
-        "[PHASE_COUNT]"
-    }
-    unclassified = found - crippled_classified
-    assert unclassified == {"[PHASE_COUNT]"}
+    wide = set(_WIDE_BRACKET_SPAN_RE.findall(text))
+    narrow = set(_BRACKET_TOKEN_RE.findall(text))
+    invisible_to_narrow = wide - narrow
+    assert len(invisible_to_narrow) == 1
+    [span] = invisible_to_narrow
+    assert span.startswith("[PROJECT HARD BOUNDARY")
+    assert len(span) == 303
+
+    # And confirm it's now recognized, not merely detected as a gap.
+    assert find_fill_in_blocks(text, CustomizationStep.STEP_10) == [span]
+    assert find_unclassified_bracket_spans(text, CustomizationStep.STEP_10) == []
+
+
+def test_completeness_check_fails_when_a_real_token_is_unclassified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Demonstrates the completeness check firing for real, not merely existing: reproduce the exact
+    shape of the [RESEARCH FOCUS]/[PHASE_COUNT] miss by removing a real token from
+    NON_PLACEHOLDER_BRACKET_TOKENS (via monkeypatch, so find_unclassified_bracket_spans's own module
+    globals see the crippled set) and confirming it is reported as unclassified -- the hard-boundary
+    block, correctly classified via the marker registry, must NOT also show up as noise."""
+    import loopr.customization.templates as templates_module
+
+    crippled = templates_module.NON_PLACEHOLDER_BRACKET_TOKENS - {"[PHASE_COUNT]"}
+    monkeypatch.setattr(templates_module, "NON_PLACEHOLDER_BRACKET_TOKENS", crippled)
+
+    text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    unclassified = templates_module.find_unclassified_bracket_spans(text, CustomizationStep.STEP_10)
+    assert unclassified == ["[PHASE_COUNT]"]
+
+
+def test_unresolved_fill_in_blocks_detects_untouched_hard_boundary() -> None:
+    """FIX 1's detection primitive, unit-tested directly against the real file: a block still
+    byte-identical to the template is unresolved; a genuinely replaced block is not. "Resolved"
+    cannot mean "token absent" for a multi-line prose block the way it does for [PROJECT_NAME] -- the
+    template's own original text is the sentinel instead."""
+    template_text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+
+    untouched_output = template_text  # no customization applied at all
+    unresolved = unresolved_fill_in_blocks(template_text, untouched_output, CustomizationStep.STEP_10)
+    assert len(unresolved) == 1
+    assert unresolved[0].startswith("[PROJECT HARD BOUNDARY")
+
+    [block] = find_fill_in_blocks(template_text, CustomizationStep.STEP_10)
+    filled_output = template_text.replace(block, "Never replicate the client's proprietary model.")
+    assert unresolved_fill_in_blocks(template_text, filled_output, CustomizationStep.STEP_10) == []
 
 
 def test_surviving_customize_marker_detected() -> None:

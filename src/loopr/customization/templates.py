@@ -259,6 +259,88 @@ NON_PLACEHOLDER_BRACKET_TOKENS: frozenset[str] = frozenset(
 
 _BRACKET_TOKEN_RE = re.compile(r"\[[A-Za-z0-9 _]+\]")
 
+# INDEPENDENT-ORACLE RULE (CUSTOMIZATION_PHASE_1_SPEC.md SS4.3, decided 2026-08-03): any
+# completeness check must use a mechanism INDEPENDENT of the one it verifies, never check a regex's
+# output against itself -- a self-referential check (asserting "every token _BRACKET_TOKEN_RE finds
+# is classified", using the very regex that defines what counts as a token) certifies itself and is
+# structurally blind to anything that regex's own character class cannot see. This is the same
+# lesson as `find_gap_candidates` above (built deliberately not sharing code with the section-header
+# regexes it cross-checks), applied to the token side rather than the section side.
+#
+# Confirmed concretely: _BRACKET_TOKEN_RE (`[A-Za-z0-9 _]` only, no DOTALL) cannot match STEP_10's
+# `[PROJECT HARD BOUNDARY -- fill per project: ...]` block (SS3) -- a 303-character, 5-line,
+# punctuation- and newline-bearing bracket construct. It was invisible to the token inventory
+# entirely: not in the allowlist, not in the non-placeholder set, not reported as unclassified,
+# because the completeness check that would have caught it was checking the narrow regex's output
+# against itself. Layer 1 would pass a customization that left this -- the single highest-stakes
+# field STEP_10 defines ("Specify ... exactly what code would VIOLATE this boundary, so the review
+# agent can grep for it and HALT") -- completely unfilled, the template's own generic per-project-kind
+# examples and all, left untouched. Previously undetected (b020ade through 1ccc8dd).
+#
+# _WIDE_BRACKET_SPAN_RE is the independent oracle: any non-nested `[...]` span, DOTALL (so it spans
+# lines), tolerant of any character except `[`/`]` themselves, bounded only to guard against a
+# runaway match. The narrow `_BRACKET_TOKEN_RE`-based classification is checked AGAINST this oracle's
+# output, never the reverse.
+_WIDE_BRACKET_SPAN_RE = re.compile(r"\[[^\[\]]{1,2000}\]", re.DOTALL)
+
+# Multi-line, punctuation-bearing fill-in instruction blocks ARE customizer-resolvable (STEP_10 SS3
+# says so of the hard boundary explicitly: "fill per project") -- but their exact wording lives in
+# the template file, not a fixed short string, so they cannot be enumerated as frozenset members the
+# way [PROJECT_NAME] is. They are identified instead by a stable marker prefix, an explicit, auditable
+# registry exactly like the two token sets above -- NOT by "anything the wide oracle finds beyond a
+# short token is automatically a fill-in block", which would silently treat a genuinely new,
+# unclassified bracket construct as just another block to text-match, defeating the point of a
+# completeness check. Add to this registry only after reviewing the construct, same discipline as the
+# two token sets.
+STEP10_FILL_IN_BLOCK_MARKERS: tuple[str, ...] = ("[PROJECT HARD BOUNDARY",)
+
+
+def find_fill_in_blocks(text: str, step: CustomizationStep) -> list[str]:
+    """Returns the recognized multi-line fill-in blocks (STEP10_FILL_IN_BLOCK_MARKERS) actually
+    present in `text`, found via the wide-scan oracle since _BRACKET_TOKEN_RE cannot see them."""
+    if step != CustomizationStep.STEP_10:
+        raise NotImplementedError(
+            f"fill-in block inventory for {step.value} is Phase 2 work -- only step 10 is in scope"
+        )
+    spans = set(_WIDE_BRACKET_SPAN_RE.findall(text))
+    return sorted(span for span in spans if span.startswith(STEP10_FILL_IN_BLOCK_MARKERS))
+
+
+def unresolved_fill_in_blocks(template_text: str, output_text: str, step: CustomizationStep) -> list[str]:
+    """Fill-in blocks found in the TEMPLATE via `find_fill_in_blocks` are not short tokens --
+    "resolved" cannot mean "token absent" the way `unresolved_placeholders` checks it, because a
+    genuine resolution replaces the block with several sentences of project-specific prose, not a
+    short value that either is or isn't present. The template's own original block text is the
+    sentinel instead: a block still present byte-identical in the output was never touched by the
+    customizer, filled or otherwise. Returns every such surviving block, found in the template and
+    still verbatim in the output."""
+    blocks = find_fill_in_blocks(template_text, step)
+    return [block for block in blocks if block in output_text]
+
+
+def find_unclassified_bracket_spans(text: str, step: CustomizationStep) -> list[str]:
+    """The independent-oracle completeness check itself. Scans `text` with the WIDE, permissive
+    regex and returns every span that is NEITHER one of this step's classified short tokens
+    (STEP10_PLACEHOLDER_ALLOWLIST | NON_PLACEHOLDER_BRACKET_TOKENS) NOR a recognized fill-in block
+    (STEP10_FILL_IN_BLOCK_MARKERS) -- i.e. genuinely unaccounted for by any classification mechanism
+    this module has. For the real STEP_10 file this returns an empty list: the hard-boundary block is
+    accounted for via the marker registry, and every short token is classified. Anything this DOES
+    return needs a human to classify it (add to the appropriate registry above), never silently
+    absorbed as "probably fine" either way -- that silent-absorption is exactly how the hard-boundary
+    block went undetected for four commits (b020ade through 1ccc8dd)."""
+    if step != CustomizationStep.STEP_10:
+        raise NotImplementedError(
+            f"bracket-span completeness check for {step.value} is Phase 2 work -- only step 10 is "
+            "in scope"
+        )
+    classified_short = STEP10_PLACEHOLDER_ALLOWLIST | NON_PLACEHOLDER_BRACKET_TOKENS
+    spans = set(_WIDE_BRACKET_SPAN_RE.findall(text))
+    return sorted(
+        span
+        for span in spans
+        if span not in classified_short and not span.startswith(STEP10_FILL_IN_BLOCK_MARKERS)
+    )
+
 
 def inventory_placeholders(text: str, step: CustomizationStep) -> list[str]:
     """Returns the allowlisted placeholder tokens actually present in `text`, for this step. Tokens

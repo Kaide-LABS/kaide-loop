@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from loopr.customization.fidelity import apply_judge_layer, check_fidelity
-from loopr.customization.templates import extract_skeleton
+from loopr.customization.templates import extract_skeleton, find_fill_in_blocks
 from loopr.models.common import CustomizationStep
 from loopr.models.customization import FidelityResult, TemplateSkeleton
 
@@ -60,6 +60,14 @@ def test_dropping_only_why_this_must_be_airtight_is_now_rejected() -> None:
         "[PRD_FILENAME]": "ULTIMATE_PRD.md",
     }.items():
         output_text = output_text.replace(token, value)
+    # Also resolve the hard-boundary block (SS3) -- unrelated to what this test demonstrates (the
+    # section-skeleton defect), but left byte-identical it would now ALSO fail structurally via
+    # unresolved_fill_in_blocks, defeating the "ONLY the dropped section differs" isolation above.
+    [hard_boundary_block] = find_fill_in_blocks(real_template_text, CustomizationStep.STEP_10)
+    output_text = output_text.replace(
+        hard_boundary_block,
+        "This build may never produce or expose the client's proprietary ranking algorithm.",
+    )
 
     # BEFORE (simulated): the crippled 8-section extractor never saw this section to begin with, so
     # comparing its (identical, still-8-item) view of template vs. output finds no mismatch -- the
@@ -72,7 +80,11 @@ def test_dropping_only_why_this_must_be_airtight_is_now_rejected() -> None:
     crippled_template_skeleton = TemplateSkeleton(convention="all_caps", sections=crippled_sections)
     crippled_output_skeleton = TemplateSkeleton(convention="all_caps", sections=crippled_sections)
     before_fix_result = check_fidelity(
-        crippled_template_skeleton, crippled_output_skeleton, output_text, CustomizationStep.STEP_10
+        crippled_template_skeleton,
+        crippled_output_skeleton,
+        real_template_text,
+        output_text,
+        CustomizationStep.STEP_10,
     )
     assert before_fix_result.structural_pass is True, (
         "sanity check on the OLD behavior: the crippled extractor's 8-item view really did see no "
@@ -84,10 +96,62 @@ def test_dropping_only_why_this_must_be_airtight_is_now_rejected() -> None:
     template_skeleton = extract_skeleton(real_template_text, CustomizationStep.STEP_10)
     output_skeleton = extract_skeleton(output_text, CustomizationStep.STEP_10)
     after_fix_result = check_fidelity(
-        template_skeleton, output_skeleton, output_text, CustomizationStep.STEP_10
+        template_skeleton, output_skeleton, real_template_text, output_text, CustomizationStep.STEP_10
     )
     assert after_fix_result.structural_pass is False
     assert "WHY THIS MUST BE AIRTIGHT (loop context)" in after_fix_result.detail
+
+
+def _real_step10_customized(*, fill_hard_boundary: bool) -> tuple[str, str]:
+    """Builds a customization of the REAL STEP_10 template that resolves every short placeholder
+    and drops nothing structurally -- so an unfilled hard-boundary block is the ONLY thing that can
+    make it fail, isolating exactly what these two tests demonstrate. Returns (template_text,
+    output_text)."""
+    template_text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    output_text = template_text
+    for token, value in {
+        "[PROJECT_NAME]": "Acme Corp",
+        "[PROJECT_REPO_NAME]": "acme-repo",
+        "[PRD_FILENAME]": "ULTIMATE_PRD.md",
+    }.items():
+        output_text = output_text.replace(token, value)
+    if fill_hard_boundary:
+        [hard_boundary_block] = find_fill_in_blocks(template_text, CustomizationStep.STEP_10)
+        output_text = output_text.replace(
+            hard_boundary_block,
+            "This build may never produce, expose, or feed back into the client's proprietary "
+            "ranking algorithm, whether directly or by wrapping it.",
+        )
+    return template_text, output_text
+
+
+def test_unfilled_hard_boundary_block_is_rejected_by_layer_1() -> None:
+    """FIX 1, demonstrated against the real file: everything else about this customization is
+    genuine (every short placeholder resolved, section skeleton untouched) except the hard-boundary
+    block, left byte-identical to the template's own generic client-demo/halal-finance/personal-build
+    fill-in text. This is the single highest-stakes field STEP_10 defines and must fail layer 1, not
+    be deferred to layer 2 alone."""
+    template_text, output_text = _real_step10_customized(fill_hard_boundary=False)
+    template_skeleton = extract_skeleton(template_text, CustomizationStep.STEP_10)
+    output_skeleton = extract_skeleton(output_text, CustomizationStep.STEP_10)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, template_text, output_text, CustomizationStep.STEP_10
+    )
+    assert result.structural_pass is False
+    assert "PROJECT HARD BOUNDARY" in result.detail
+
+
+def test_genuinely_filled_hard_boundary_block_passes_layer_1() -> None:
+    """The other side of FIX 1: the identical customization, except the hard-boundary block is
+    genuinely replaced with project-specific prose -- must pass layer 1 (still awaiting layer 2)."""
+    template_text, output_text = _real_step10_customized(fill_hard_boundary=True)
+    template_skeleton = extract_skeleton(template_text, CustomizationStep.STEP_10)
+    output_skeleton = extract_skeleton(output_text, CustomizationStep.STEP_10)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, template_text, output_text, CustomizationStep.STEP_10
+    )
+    assert result.structural_pass is True
+    assert result.overall is False  # awaiting layer 2
 
 
 def test_genuinely_customized_output_passes_structural_layer() -> None:
@@ -98,7 +162,9 @@ def test_genuinely_customized_output_passes_structural_layer() -> None:
         + "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
     )
     output_skeleton = extract_skeleton(output, CustomizationStep.STEP_10)
-    result = check_fidelity(_template_skeleton(), output_skeleton, output, CustomizationStep.STEP_10)
+    result = check_fidelity(
+        _template_skeleton(), output_skeleton, TEMPLATE_TEXT, output, CustomizationStep.STEP_10
+    )
     assert result.structural_pass is True
     assert result.overall is False  # awaiting layer 2 -- never true from layer 1 alone
 
@@ -112,7 +178,9 @@ def test_unverified_and_project_name_both_handled_correctly() -> None:
         + "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
     )
     output_skeleton = extract_skeleton(output, CustomizationStep.STEP_10)
-    result = check_fidelity(_template_skeleton(), output_skeleton, output, CustomizationStep.STEP_10)
+    result = check_fidelity(
+        _template_skeleton(), output_skeleton, TEMPLATE_TEXT, output, CustomizationStep.STEP_10
+    )
     assert result.structural_pass is True
     assert "[UNVERIFIED]" in output  # survived byte-identical
     assert "[PROJECT_NAME]" not in output  # genuinely resolved
@@ -129,7 +197,7 @@ def test_deliberately_restructured_customization_is_rejected() -> None:
     )
     output_skeleton = extract_skeleton(restructured, CustomizationStep.STEP_10)
     result = check_fidelity(
-        _template_skeleton(), output_skeleton, restructured, CustomizationStep.STEP_10
+        _template_skeleton(), output_skeleton, TEMPLATE_TEXT, restructured, CustomizationStep.STEP_10
     )
     assert result.structural_pass is False
     assert "2. SECOND SECTION" in result.detail
@@ -143,7 +211,9 @@ def test_reordered_sections_are_rejected() -> None:
         + "[UNVERIFIED].\n\n1. FIRST SECTION\n\nDo the first thing for acme-repo.\n"
     )
     output_skeleton = extract_skeleton(reordered, CustomizationStep.STEP_10)
-    result = check_fidelity(_template_skeleton(), output_skeleton, reordered, CustomizationStep.STEP_10)
+    result = check_fidelity(
+        _template_skeleton(), output_skeleton, TEMPLATE_TEXT, reordered, CustomizationStep.STEP_10
+    )
     assert result.structural_pass is False
     assert "mismatch" in result.detail
 
@@ -156,7 +226,9 @@ def test_unresolved_placeholder_is_rejected() -> None:
         + "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
     )
     output_skeleton = extract_skeleton(output, CustomizationStep.STEP_10)
-    result = check_fidelity(_template_skeleton(), output_skeleton, output, CustomizationStep.STEP_10)
+    result = check_fidelity(
+        _template_skeleton(), output_skeleton, TEMPLATE_TEXT, output, CustomizationStep.STEP_10
+    )
     assert result.structural_pass is False
     assert "PROJECT_NAME" in result.detail
 
@@ -172,7 +244,9 @@ def test_surviving_customize_marker_is_rejected() -> None:
         + "\n<<CUSTOMIZE: adjust per project>>\n"  # marker survived -- must never reach the agent
     )
     output_skeleton = extract_skeleton(output, CustomizationStep.STEP_10)
-    result = check_fidelity(template_skeleton, output_skeleton, output, CustomizationStep.STEP_10)
+    result = check_fidelity(
+        template_skeleton, output_skeleton, template_with_marker, output, CustomizationStep.STEP_10
+    )
     assert result.structural_pass is False
     assert "CUSTOMIZE" in result.detail
 
@@ -189,7 +263,7 @@ def test_placeholder_deletion_only_customization_is_rejected_by_layer_2() -> Non
     )
     output_skeleton = extract_skeleton(generic_output, CustomizationStep.STEP_10)
     structural = check_fidelity(
-        _template_skeleton(), output_skeleton, generic_output, CustomizationStep.STEP_10
+        _template_skeleton(), output_skeleton, TEMPLATE_TEXT, generic_output, CustomizationStep.STEP_10
     )
     assert structural.structural_pass is True  # layer 1 alone cannot catch generic filler
 
@@ -211,7 +285,9 @@ def test_genuinely_specific_output_passes_layer_2() -> None:
         + "2. SECOND SECTION\n\nDo the second thing. Mark anything unverifiable as [UNVERIFIED].\n"
     )
     output_skeleton = extract_skeleton(output, CustomizationStep.STEP_10)
-    structural = check_fidelity(_template_skeleton(), output_skeleton, output, CustomizationStep.STEP_10)
+    structural = check_fidelity(
+        _template_skeleton(), output_skeleton, TEMPLATE_TEXT, output, CustomizationStep.STEP_10
+    )
     assert structural.structural_pass is True
 
     final = apply_judge_layer(structural, judge_passed=True, judge_reason="names real project details")

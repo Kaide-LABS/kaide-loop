@@ -360,7 +360,11 @@ def cmd_customize(args: argparse.Namespace) -> int:
     if customization.step10_fidelity is None or not customization.step10_fidelity.overall:
         output_skeleton = extract_skeleton(output_text, CustomizationStep.STEP_10)
         structural = check_fidelity(
-            customization.step10_skeleton, output_skeleton, output_text, CustomizationStep.STEP_10
+            customization.step10_skeleton,
+            output_skeleton,
+            template_text,
+            output_text,
+            CustomizationStep.STEP_10,
         )
         if not structural.structural_pass:
             customization.step10_fidelity = structural
