@@ -13,9 +13,18 @@ import pytest
 
 from loopr import exit_codes
 from loopr.cli import main
-from loopr.models.common import Verdict
+from loopr.customization.customize import (
+    STEP10_SUBAGENT_DESCRIPTION,
+    STEP10_SUBAGENT_MODEL,
+    STEP10_SUBAGENT_NAME,
+    apply_customization_response,
+)
+from loopr.customization.templates import find_fill_in_blocks
+from loopr.models.common import CustomizationStep, Verdict
 from loopr.models.judge import JudgeResponse
 from loopr.state.store import StateStore
+
+REAL_TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "prompts" / "Template_prompts"
 
 # Every fixture carries a dummy title line first, matching real STEP_10's own shape -- extract_
 # skeleton always excludes line 1 as the declared title exclusion (CUSTOMIZATION_PHASE_1_SPEC.md
@@ -55,6 +64,22 @@ def _seed_templates(repo: Path) -> None:
     templates_dir = repo / "prompts" / "Template_prompts"
     templates_dir.mkdir(parents=True)
     (templates_dir / "STEP_10").write_text(_STEP10_TEMPLATE, encoding="utf-8")
+
+
+def _parse_subagent(text: str) -> tuple[dict[str, str], str]:
+    """Splits a rendered subagent file into (frontmatter dict, body) for test assertions -- a
+    deliberately simple, test-only parser (no YAML dependency, matching the project's own
+    single-runtime-dependency invariant); real frontmatter values here are plain single-line scalars
+    with no colons of their own, so naive key/value splitting on the first ':' is safe."""
+    assert text.startswith("---\n"), "subagent file must start with YAML frontmatter"
+    _, frontmatter_block, body = text.split("---\n", 2)
+    frontmatter: dict[str, str] = {}
+    for line in frontmatter_block.splitlines():
+        if not line.strip():
+            continue
+        key, _, value = line.partition(":")
+        frontmatter[key.strip()] = value.strip()
+    return frontmatter, body.lstrip("\n")
 
 
 def _answer_pending_judge(state_dir: Path, answer_path: Path) -> None:
@@ -169,11 +194,21 @@ def test_customize_step10_produces_fidelity_verified_output(
 
     assert final_state.customization.step10_output_path is not None
     output_path = Path(final_state.customization.step10_output_path)
+    # CUSTOMIZATION_PHASE_1_SPEC.md SS6.1a: the delivered artifact is a dispatchable subagent under
+    # .claude/agents/, not a free-standing prompt file.
+    assert output_path == repo / ".claude" / "agents" / f"{STEP10_SUBAGENT_NAME}.md"
     output_text = output_path.read_text(encoding="utf-8")
+
+    frontmatter, body = _parse_subagent(output_text)
+    assert frontmatter["name"] == STEP10_SUBAGENT_NAME
+    assert frontmatter["description"] == STEP10_SUBAGENT_DESCRIPTION
+    assert frontmatter["model"] == STEP10_SUBAGENT_MODEL
+    # STEP 3: fidelity checking applies to the BODY, unchanged in substance from before this
+    # amendment -- same assertions as the pre-subagent version of this test.
     # JudgeResponse.drafted_text is whitespace-stripped by LooprBase's str_strip_whitespace=True.
-    assert output_text == _GOOD_CUSTOMIZATION.strip()
-    assert "[UNVERIFIED]" in output_text
-    assert "[PROJECT_NAME]" not in output_text
+    assert body.rstrip("\n") == _GOOD_CUSTOMIZATION.strip()
+    assert "[UNVERIFIED]" in body
+    assert "[PROJECT_NAME]" not in body
 
 
 def test_customize_rejects_restructured_output(confirmed_state: tuple[Path, Path], tmp_path: Path) -> None:
@@ -198,6 +233,12 @@ def test_customize_rejects_restructured_output(confirmed_state: tuple[Path, Path
     assert final_state.customization.step10_fidelity is not None
     assert final_state.customization.step10_fidelity.structural_pass is False
     assert final_state.customization.step10_fidelity.overall is False
+    # A fidelity-failing draft must never be promoted into the live, dispatchable subagent registry
+    # (CUSTOMIZATION_PHASE_1_SPEC.md SS6.1a) -- step10_output_path still points at the internal
+    # staging draft, not .claude/agents/.
+    subagent_path = repo / ".claude" / "agents" / f"{STEP10_SUBAGENT_NAME}.md"
+    assert not subagent_path.exists()
+    assert Path(final_state.customization.step10_output_path) != subagent_path
 
 
 def test_customize_rejects_placeholder_deletion_only_via_layer2(
@@ -236,6 +277,51 @@ def test_customize_rejects_placeholder_deletion_only_via_layer2(
     assert final_state.customization.step10_fidelity is not None
     assert final_state.customization.step10_fidelity.overall is False
     assert final_state.customization.step10_fidelity.judge_pass is False
+    # Layer 2 rejected it too -- still never promoted (same guard as the layer-1 rejection above).
+    subagent_path = repo / ".claude" / "agents" / f"{STEP10_SUBAGENT_NAME}.md"
+    assert not subagent_path.exists()
+    assert Path(final_state.customization.step10_output_path) != subagent_path
+
+
+def test_judge_request_never_carries_frontmatter_content(
+    confirmed_state: tuple[Path, Path], tmp_path: Path
+) -> None:
+    """CUSTOMIZATION_PHASE_1_SPEC.md SS1/SS6.1a's critical design point, demonstrated rather than
+    merely implemented-correctly-by-inspection: the subagent frontmatter (name/description/model) is
+    FIXED CONFIGURATION written from constants -- it must never be a JudgeRequest input, never appear
+    anywhere in what the judge is shown, and drafting a body must never require or produce it."""
+    repo, state_path = confirmed_state
+
+    code = main(["customize", "--state", str(state_path), "--step", "10"])
+    assert code == exit_codes.JUDGE_REQUIRED
+    request_raw = (state_path.parent / "pending_judge.json").read_text(encoding="utf-8")
+    request = json.loads(request_raw)
+
+    # The declared, version-gated input scope is unchanged by this amendment -- exactly what
+    # CUSTOMIZATION_PHASE_1_SPEC.md SS4.1 specified before subagent dispatch existed.
+    assert set(request["inputs"].keys()) == {
+        "template_text",
+        "problem_statement",
+        "acceptance_criteria",
+        "scope_edges",
+        "boundary",
+        "context_notes",
+        "conformance_summary",
+    }
+    # Nothing in the full request envelope (inputs, rubric_text, or otherwise) carries a frontmatter
+    # line -- checked as an exact frontmatter-line substring, not just the bare word, since e.g.
+    # "opus" alone could plausibly appear in unrelated prose.
+    assert f"name: {STEP10_SUBAGENT_NAME}" not in request_raw
+    assert f"model: {STEP10_SUBAGENT_MODEL}" not in request_raw
+    assert STEP10_SUBAGENT_DESCRIPTION not in request_raw
+
+    # apply_customization_response returns the BODY alone -- frontmatter-wrapping happens nowhere
+    # inside the judge-request/response layer, only later, as separate post-processing in cli.py.
+    response = JudgeResponse(call_id=request["call_id"], drafted_text=_GOOD_CUSTOMIZATION, reason="drafted")
+    body = apply_customization_response(response)
+    assert not body.startswith("---")
+    assert f"model: {STEP10_SUBAGENT_MODEL}" not in body
+    assert f"name: {STEP10_SUBAGENT_NAME}" not in body
 
 
 def test_topology_independence_resume_from_state_produces_byte_identical_output(
@@ -264,6 +350,7 @@ def test_topology_independence_resume_from_state_produces_byte_identical_output(
     assert code == exit_codes.OK
     customization_a = StateStore(state_path).load().customization
     assert customization_a is not None and customization_a.step10_output_path is not None
+    assert Path(customization_a.step10_output_path) == repo / ".claude" / "agents" / f"{STEP10_SUBAGENT_NAME}.md"
     output_a = Path(customization_a.step10_output_path).read_text(encoding="utf-8")
 
     # Run B: a SECOND, independent confirmed repo/state -- "interrupted" by explicitly reloading
@@ -313,3 +400,101 @@ def test_topology_independence_no_session_identity_in_state(confirmed_state: tup
             assert "role" not in lowered
             assert "architect" not in lowered
             assert "executor" not in lowered
+
+
+def _seed_real_step10_template(repo: Path) -> None:
+    templates_dir = repo / "prompts" / "Template_prompts"
+    templates_dir.mkdir(parents=True)
+    real_text = (REAL_TEMPLATES_DIR / "STEP_10").read_text(encoding="utf-8")
+    (templates_dir / "STEP_10").write_text(real_text, encoding="utf-8")
+
+
+def _plausible_real_step10_customization(template_text: str) -> str:
+    """A genuinely-passing customization of the REAL STEP_10 template: every customizer-resolvable
+    placeholder filled with project-specific values, [RESEARCH FOCUS]/[PHASE_COUNT]/[UNVERIFIED]
+    left untouched (they are not placeholders -- CUSTOMIZATION_PHASE_1_SPEC.md SS4.2), and the
+    hard-boundary block replaced with real, project-specific prose (SS4.2's third trap)."""
+    output = template_text
+    for token, value in {
+        "[PROJECT_NAME]": "Acme Ledger",
+        "[PROJECT_REPO_NAME]": "acme-ledger",
+        "[PRD_FILENAME]": "ACME_LEDGER_PRD.md",
+    }.items():
+        output = output.replace(token, value)
+    [block] = find_fill_in_blocks(template_text, CustomizationStep.STEP_10)
+    output = output.replace(
+        block,
+        "This build may never expose, compute, or feed back into Acme Ledger's proprietary "
+        "reconciliation algorithm, whether directly or by wrapping it.",
+    )
+    return output
+
+
+def test_full_cli_run_against_real_step10_template_produces_passing_subagent(tmp_path: Path) -> None:
+    """SS8 re-demonstrated end to end against the REAL template file in prompts/Template_prompts/
+    (every other test in this file uses a small synthetic fixture for isolation) -- a full
+    CLI-driven `loopr customize --step 10` run against a real confirmed state produces a real
+    .claude/agents/loopr-step10.md with correct frontmatter and a fidelity-passing body. This is the
+    output-format change's own gate: the prior Phase 1 green was established against a plain-file
+    shape that no longer exists, so it carries no weight for this amendment on its own."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _seed_real_step10_template(repo)
+    state_path = tmp_path / "state.json"
+    assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
+    store = StateStore(state_path)
+    _drive_to_complete(state_path, store.dir, tmp_path)
+
+    template_text = (repo / "prompts" / "Template_prompts" / "STEP_10").read_text(encoding="utf-8")
+    customized = _plausible_real_step10_customization(template_text)
+    judge_response_path = tmp_path / "real_judge_response.json"
+
+    code = main(["customize", "--state", str(state_path), "--step", "10"])
+    assert code == exit_codes.JUDGE_REQUIRED
+    request = json.loads((store.dir / "pending_judge.json").read_text(encoding="utf-8"))
+    assert request["call_type"] == "step10_customization"
+    response = JudgeResponse(call_id=request["call_id"], drafted_text=customized, reason="drafted")
+    judge_response_path.write_text(response.model_dump_json(), encoding="utf-8")
+
+    code = main(
+        ["customize", "--state", str(state_path), "--step", "10", "--judge-response", str(judge_response_path)]
+    )
+    assert code == exit_codes.JUDGE_REQUIRED  # layer 1 passed on the real 9-section skeleton
+    request2 = json.loads((store.dir / "pending_judge.json").read_text(encoding="utf-8"))
+    assert request2["call_type"] == "step10_fidelity_judge"
+    response2 = JudgeResponse(
+        call_id=request2["call_id"],
+        passed=True,
+        reason="names Acme Ledger's real repo, PRD filename, and reconciliation-algorithm boundary",
+    )
+    judge_response_path.write_text(response2.model_dump_json(), encoding="utf-8")
+
+    code = main(
+        ["customize", "--state", str(state_path), "--step", "10", "--judge-response", str(judge_response_path)]
+    )
+    assert code == exit_codes.OK
+
+    subagent_path = repo / ".claude" / "agents" / f"{STEP10_SUBAGENT_NAME}.md"
+    assert subagent_path.exists()
+    frontmatter, body = _parse_subagent(subagent_path.read_text(encoding="utf-8"))
+    assert frontmatter["name"] == STEP10_SUBAGENT_NAME
+    assert frontmatter["model"] == STEP10_SUBAGENT_MODEL
+    assert frontmatter["description"] == STEP10_SUBAGENT_DESCRIPTION
+
+    # Body-level checks -- the same fidelity substance as before this amendment, now inside a
+    # subagent file's body instead of being the whole file.
+    assert "[RESEARCH FOCUS]" in body  # runtime-derived, must survive (SS4.2)
+    assert "[PHASE_COUNT]" in body  # runtime-derived, must survive (SS4.2)
+    assert "[UNVERIFIED]" in body  # non-placeholder tag, must survive (SS4.2)
+    assert "[PROJECT_NAME]" not in body
+    assert "[PROJECT_REPO_NAME]" not in body
+    assert "[PRD_FILENAME]" not in body
+    assert "PROJECT HARD BOUNDARY" not in body  # SS4.2's third trap, genuinely resolved
+
+    final_state = StateStore(state_path).load()
+    assert final_state.customization is not None
+    assert final_state.customization.step10_fidelity is not None
+    assert final_state.customization.step10_fidelity.overall is True
+    assert final_state.customization.step10_fidelity.structural_pass is True
+    assert final_state.customization.step10_fidelity.judge_pass is True
+    assert final_state.customization.step10_output_path == str(subagent_path)

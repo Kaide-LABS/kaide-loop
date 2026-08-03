@@ -17,16 +17,25 @@ capability this spec designs).
 
 ## §0 Phase Plan Header
 
-**Phase 1 of 2.** The split is not arbitrary — it falls on a real dependency boundary discovered
-while writing this spec (§5): step11/step12 customization cannot happen until step10 has *executed*,
-because several of their placeholders are only knowable from step10's output. Phase 1 is
-independently useful and independently testable without Phase 2 existing.
+**[AMENDED 2026-08-03 — now Phase 1 of 3, not 2.]** Phase 1 shipped and is approved
+(`3e25f41`). Writing `CUSTOMIZATION_PHASE_2_SPEC.md` surfaced a second real dependency boundary,
+same test as the original split (independently useful, independently testable): step11/step12
+customization and loop sequencing don't depend on each other. The former is a token/structure
+problem against two more templates; the latter is git-marker discovery and phase-advance logic that
+operates on *already-customized* prompts, regardless of which mechanism produced them. Bundling them
+under one "Phase 2" was the untested assumption; splitting them is the correction, not a new plan.
 
-- **Phase 1 (this spec):** step10 customization, the two-layer fidelity check, the CLI surface, and
-  state. Deliverable: a genuinely customized step10 prompt, produced from confirmed artifacts, with
-  its fidelity mechanically verified.
-- **Phase 2 (spec written by the step12-equivalent review on approval of Phase 1):** step11/step12
-  customization from step10's *output*, plus loop sequencing to `BUILD_COMPLETE.md`.
+- **Phase 1 (this spec, done):** step10 customization, the two-layer fidelity check, the CLI surface,
+  and state.
+- **Phase 2 (`CUSTOMIZATION_PHASE_2_SPEC.md`):** step11/step12 customization from step10's *output*.
+- **Phase 3 (spec written on Phase 2's approval):** loop sequencing to `BUILD_COMPLETE.md`.
+
+**[NOTE ADDED 2026-08-03, forward-looking only — not a Phase 3 decision]:** §1's subagent amendment
+means Phase 3 is no longer purely "what prompt to hand a human next." Once step10/11/12 dispatch as
+subagents, "sequencing" plausibly means choosing *which subagent to dispatch*, not which file to
+paste. Whether that changes Phase 3's mechanism (still git-marker discovery, read by an invoking
+agent, just now choosing a subagent instead of a file?) or its scope is genuinely undecided — flagged
+here so Phase 3's own spec starts from this question instead of rediscovering it.
 
 ---
 
@@ -55,6 +64,30 @@ prompt-file workflow — given a project's confirmed spec context, produces the 
 and step12 prompts and drives their execution end-to-end without the user manually pasting each one
 into a separate session. Does not build or invoke native subagents; does not adapt or integrate
 Traycer.
+
+**[AMENDED 2026-08-03 — the "does not build or invoke native subagents" clause is partially
+reversed.]** Disclosed, not silently rewritten — the verbatim quotes above are the confirmed record
+of what was decided at Gate 2 and stay as they were said. What changes:
+
+`loopr customize` now generates its output as a native Claude Code subagent definition
+(`.claude/agents/`), not a plain prompt file, for all three steps — step10 pinned to an Opus-class
+model, step11 pinned to Sonnet at low effort, step12 pinned to Sonnet at high effort. This is
+**narrower than it looks**, and the boundary is precise: it is subagent *generation as the dispatch
+surface* for already-customized prompts. It is not:
+
+- the full V2 archetype system (`docs/loopr-v2-agent-archetypes.md` — ARCHITECT/EXECUTOR/REVIEWER/
+  AUDITOR roles, the escalation chain, structured reviewer verdicts, the two-layer scratch files) —
+  still forward spec, still not built now;
+- Traycer, still parked, still unassessed;
+- the Phase B harness (build→review→audit *loop*, git-marker phase discovery, gates-as-ground-truth,
+  the audit tier) — still parked. Generating a subagent that *can run* step11 is not the same as
+  building the loop that decides *when* to run it; see the amended §7.2 and §9.
+
+This is the original PRD's A5 design (`.claude/agents/` generation, pinned models), narrower than
+A5 ever was — A5 covered build/review/audit subagents for the harness; this covers exactly the three
+prompts this build already customizes, nothing else. See §6.1 for the mechanism, §7.1 for a
+consequence this has for maker/checker separation that the original scope edge couldn't have, §9 for
+the precise remaining boundary.
 
 **Soft context:** none. The run's `context.md` records an explicit clean slate, with a note that a
 larger set of project-scope decisions (multi-loopr, per-step model control, revised subagent design)
@@ -390,6 +423,39 @@ Refuses to run unless all six conditions pass on the supplied state — customiz
 unconfirmed spec is the same class of error as emitting a baby PRD early, and `cmd_emit`'s existing
 guard (`cli.py`) is the precedent to follow.
 
+### 6.1a Output target — `.claude/agents/`, not a plain file [ADDED 2026-08-03]
+
+Per §1's amendment, the fidelity-checked output is written as a subagent definition, not a bare
+markdown file:
+
+```
+.claude/agents/loopr-step10.md   -- model: opus (see table below)
+.claude/agents/loopr-step11.md   -- model: sonnet, effort: low
+.claude/agents/loopr-step12.md   -- model: sonnet, effort: high
+```
+
+| Step | Model | Effort | Rationale |
+|---|---|---|---|
+| 10 | Opus-class | — | Guaranteed floor, config-declared not operator-remembered — the reasoning already settled in `docs/loopr-v2-agent-archetypes.md`'s Step-10 correction (a Sonnet-low pass pinned an uninstallable dependency and declared no escalation needed; Opus-high caught it on self-verification). That reasoning transfers unchanged; it never depended on the archetype system around it. |
+| 11 | Sonnet | Low | Confirmed by the user 2026-08-03. Matches the V2 doc's EXECUTOR tier (most output volume, checked immediately downstream by step12). |
+| 12 | Sonnet | High | Confirmed by the user 2026-08-03. Matches the V2 doc's REVIEWER tier (judgment work, scoped to one phase against one spec). |
+
+**Frontmatter schema is NOT yet verified against Claude Code's actual subagent-authoring
+requirements — flagged explicitly rather than asserted.** The working assumption is YAML frontmatter
+with at minimum `name`, `description`, `model`, and an `effort` field for step11/12 — modeled on this
+project's own visible agent roster (e.g. `Explore`, `claude-code-guide`) and this session's own
+`/model` / `/effort` mechanics. Whoever implements this must confirm the real schema (does `effort`
+exist as a frontmatter field at all, or only as a session-level `/effort` command with no per-subagent
+equivalent — if the latter, step11/step12's effort split cannot be config-declared the way step10's
+model can, and that gap must be reported, not silently dropped) before writing `customize.py`'s
+output path. Do not guess a schema and ship it unverified — same discipline as every prior claim in
+this document that turned out to need checking against the real thing.
+
+The `--out DIR` flag's meaning changes accordingly: it now roots the `.claude/agents/` path, not a
+free-standing output location. `CustomizationState.step10_output_path` (§6.2) stores the actual
+subagent file path — the field's *meaning* (where the fidelity-checked output landed) is unchanged;
+only what kind of file lives there changes.
+
 ### 6.2 State
 
 ```
@@ -436,18 +502,46 @@ replaced with a true statement — it is *genuinely a separate pass* on the same
 treated with identical skepticism regardless. Phase 2 must carry that same honesty into whatever it
 generates, in both topologies.
 
-**This is a real, disclosed weakening versus genuinely separate agents, not a solved problem.**
-Native subagents would restore platform-enforced separation — and are explicitly out of scope by the
-confirmed scope edge. Do not quietly re-derive them here.
+**[AMENDED 2026-08-03 — partially closed, not by this phase's original design.]** ~~This is a real,
+disclosed weakening versus genuinely separate agents, not a solved problem. Native subagents would
+restore platform-enforced separation — and are explicitly out of scope by the confirmed scope edge.
+Do not quietly re-derive them here.~~ Per §1's amendment, step11 and step12 now dispatch as separate
+native subagents (`loopr-step11`, `loopr-step12`), each with its own model/effort config. That
+restores real, platform-enforced separation for the build-vs-review split specifically — not because
+this phase set out to solve it, but as a consequence of the subagent-dispatch decision landing here.
 
-### 7.2 "Drives execution end-to-end" without a harness
+**What this does and does not fix, stated precisely so it isn't overclaimed:** two separate subagent
+*invocations* means step12 does not inherit step11's conversation by default — closer to genuine
+separateness than one session running both. It does **not** mean `[EXECUTOR_AGENT_FICTION]` becomes
+unnecessary or that the honesty requirement from the paragraph above lapses: a subagent can still be
+invoked with context bleeding in depending on how dispatch is wired (e.g., if the same orchestrating
+session passes step11's transcript to step12 explicitly), and single-session *interrogation* still
+means the spec-author bias described above is unaffected regardless of build/review separation. Don't
+let "subagents now exist" quietly stand in for "separation is solved" — it closes the platform-level
+gap this section named, not the two other costs named beside it.
 
-Reconciling the boundary ("drives their execution end-to-end") with the scope edge (no subagents, no
-Traycer): the module never orchestrates anything itself. It emits the right customized prompt at the
-right time and the invoking agent executes it — the identical pattern as judge calls. Phase discovery
-is already carried *inside* the step11/12 prompts (git commit markers: `feat: Phase N implementation
-(TAG)`, `chore: Phase N review approved (TAG)`), so the module does not reimplement it. Its only loop
-responsibility is terminating when `BUILD_COMPLETE.md` appears. That is Phase 2's work.
+### 7.2 "Drives execution end-to-end" without a full harness
+
+**[CORRECTED 2026-08-03 — this section previously said "Phase 2's work" for loop termination; that
+was already stale before the subagent amendment. §0 splits loop sequencing into Phase 3, not Phase 2
+— this section was not updated when that split happened. Fixed here, along with the subagent
+consequence.]**
+
+Reconciling the boundary ("drives their execution end-to-end") with what's still excluded (Traycer,
+the full build→review→audit loop): the module still never orchestrates the *loop* itself — no
+git-marker phase discovery, no gates-as-ground-truth, no audit tier, none of Phase B's three
+invariants implemented here. What changed per §1's amendment is narrower than "the module now
+orchestrates": it emits a *dispatchable subagent* instead of a plain prompt, but something external
+still decides *when* to dispatch it — that decision is Phase 3's work (loop sequencing to
+`BUILD_COMPLETE.md`), not this phase's, and not automatic just because a subagent exists to receive
+the dispatch.
+
+Phase discovery is still carried *inside* the step11/12 prompts themselves (git commit markers:
+`feat: Phase N implementation (TAG)`, `chore: Phase N review approved (TAG)`) — the module does not
+reimplement it in Phase 1 or Phase 2. Whether Phase 3, once subagents exist as the dispatch surface,
+still needs a human or invoking agent to read git state and choose which subagent to run next, or
+whether subagent dispatch changes that design, is an open question for Phase 3's own spec — not
+answered here, and not assumed either way by this amendment.
 
 ### 7.3 Context pressure in single-session use
 
@@ -491,10 +585,18 @@ The confirmed criterion in §1 is the **Phase 2** bar and must not be claimed be
 
 ## §9 Explicit non-goals
 
-- **Step11/step12 customization and loop sequencing** — Phase 2, gated on the §5 dependency.
-- **Native Claude Code subagents; Traycer; any harness** — confirmed scope edge. Untouched.
-- **Gate/subagent generation (A5's harness-facing half)** — already excluded by
-  `SKILL_PHASE_1_SPEC.md`; unchanged here.
+- **Step11/step12 customization** — Phase 2, gated on the §5 dependency. **Loop sequencing** —
+  Phase 3, per §0's amendment.
+- **[AMENDED 2026-08-03]** ~~Native Claude Code subagents; Traycer; any harness — confirmed scope
+  edge. Untouched.~~ Native subagent *generation for step10/11/12 dispatch* is now in scope (§1, §6.1a)
+  — that clause is superseded, not the whole line. **Still fully out, unamended:** Traycer; the Phase
+  B harness as a loop (build→review→audit orchestration, git-marker phase discovery,
+  gates-as-ground-truth, the audit tier); any code that decides *when* to dispatch a subagent (that's
+  Phase 3's open question, not decided by this amendment).
+- **Gate/subagent generation for the harness's build/review/audit tiers (A5's original,
+  broader sense)** — already excluded by `SKILL_PHASE_1_SPEC.md`; unchanged here. Do not read this
+  phase's narrow subagent generation (three specific, already-customized prompts) as reopening that
+  broader exclusion — it is a different, smaller thing wearing the same mechanism.
 - **The deferred project-scope decisions** — multi-loopr, per-step model control, revised subagent
   count. Explicitly deferred by the user during the run that produced this spec's baby PRD, recorded
   in that run's `context.md`, and logged outside it. **Not inputs to this spec**, including the

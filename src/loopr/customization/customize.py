@@ -89,3 +89,40 @@ def apply_fidelity_judge_response(response: JudgeResponse) -> tuple[bool, str]:
     if response.passed is None:
         raise CustomizationError("STEP10_FIDELITY_JUDGE response must carry passed")
     return response.passed, response.reason
+
+
+# Subagent dispatch (CUSTOMIZATION_PHASE_1_SPEC.md SS1, SS6.1a, amended 2026-08-03). FIXED
+# CONFIGURATION, written directly from constants here -- never a JudgeRequest input, never a
+# JudgeResponse field, never touched by build_customization_request/apply_customization_response
+# above. A judge call could never be trusted to hold a model pin constant run to run the way a
+# module-level constant can; the frontmatter is exactly as invariant as TEMPLATES_DIR_NAME or
+# STEP10_PLACEHOLDER_ALLOWLIST in templates.py, not customization output.
+#
+# Model value confirmed against real, shipped Claude Code subagent definitions (not merely assumed):
+# every real agent file's `model:` field uses a coarse tier keyword (inherit/sonnet/opus/haiku), never
+# a specific dated model ID string -- "opus" is correct here, not e.g. "claude-opus-5".
+STEP10_SUBAGENT_NAME = "loopr-step10"
+STEP10_SUBAGENT_MODEL = "opus"
+STEP10_SUBAGENT_DESCRIPTION = (
+    "Runs this project's customized step10 prompt -- PRD modernization grounded in current external "
+    "sources, then the hyper-granular Phase 1 technical blueprint built from the modernised PRD. Use "
+    "once `loopr customize --step 10` has produced a fidelity-verified customization and the "
+    "confirmed spec is ready for architecture drafting."
+)
+
+
+def render_step10_subagent(body: str) -> str:
+    """Wraps the fidelity-checked, judge-drafted step10 BODY in a Claude Code subagent definition --
+    YAML frontmatter (the three constants above) followed by `body` verbatim, byte-for-byte, as the
+    system prompt. Pure post-processing: called only AFTER both fidelity layers already passed on
+    `body` alone (cli.py's cmd_customize) -- the frontmatter itself is never fidelity-checked, because
+    nothing in it is drafted content with genuineness to verify (CUSTOMIZATION_PHASE_1_SPEC.md SS6.1a).
+    """
+    return (
+        "---\n"
+        f"name: {STEP10_SUBAGENT_NAME}\n"
+        f"description: {STEP10_SUBAGENT_DESCRIPTION}\n"
+        f"model: {STEP10_SUBAGENT_MODEL}\n"
+        "---\n\n"
+        f"{body}\n"
+    )

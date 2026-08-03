@@ -18,10 +18,12 @@ from loopr.artifacts.baby_prd import render_baby_prd
 from loopr.artifacts.conformance_ledger import render_conformance_ledger
 from loopr.artifacts.context_md import render_context_md
 from loopr.customization.customize import (
+    STEP10_SUBAGENT_NAME,
     apply_customization_response,
     apply_fidelity_judge_response,
     build_customization_request,
     build_fidelity_judge_request,
+    render_step10_subagent,
 )
 from loopr.customization.fidelity import apply_judge_layer, check_fidelity
 from loopr.customization.templates import discover_template, extract_skeleton, find_gap_candidates
@@ -314,7 +316,11 @@ def cmd_customize(args: argparse.Namespace) -> int:
     client = ResumingJudgeClient(judge_p, preloaded_response)
 
     repo_root = Path(state.repo_root)
-    out_dir = Path(args.out) if args.out else repo_root / ".claude" / "loopr"
+    # CUSTOMIZATION_PHASE_1_SPEC.md SS6.1a (amended 2026-08-03): the delivered artifact is now a
+    # dispatchable subagent under .claude/agents/, not a free-standing prompt file. --out roots that
+    # directory directly (same convention cmd_emit already uses for its own --out).
+    agents_dir = Path(args.out) if args.out else repo_root / ".claude" / "agents"
+    subagent_path = agents_dir / f"{STEP10_SUBAGENT_NAME}.md"
 
     if state.customization is None:
         template_path = discover_template(repo_root, CustomizationStep.STEP_10)
@@ -340,6 +346,11 @@ def cmd_customize(args: argparse.Namespace) -> int:
     customization = state.customization
     template_text = Path(customization.step10_template_path).read_text(encoding="utf-8")
 
+    # The judge-drafted body is staged OUTSIDE .claude/agents/ until BOTH fidelity layers pass on it
+    # -- a fidelity-failing draft must never become a live, dispatchable subagent (SS6.1a). This is
+    # internal working state, alongside pending_judge.json etc., not a delivered artifact.
+    draft_path = state_dir / "step10_draft.md"
+
     if customization.step10_output_path is None:
         request = build_customization_request(state, template_text)
         response = client.ask(request)
@@ -348,16 +359,15 @@ def cmd_customize(args: argparse.Namespace) -> int:
             print(f"judge call required: {judge_p}")
             return exit_codes.JUDGE_REQUIRED
         customized_text = apply_customization_response(response)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        output_path = out_dir / "step10_customized.md"
-        output_path.write_text(customized_text, encoding="utf-8")
-        customization.step10_output_path = str(output_path)
+        draft_path.parent.mkdir(parents=True, exist_ok=True)
+        draft_path.write_text(customized_text, encoding="utf-8")
+        customization.step10_output_path = str(draft_path)
         store.save(state)
 
-    output_path = Path(customization.step10_output_path)
-    output_text = output_path.read_text(encoding="utf-8")
-
     if customization.step10_fidelity is None or not customization.step10_fidelity.overall:
+        output_path = Path(customization.step10_output_path)
+        output_text = output_path.read_text(encoding="utf-8")
+
         output_skeleton = extract_skeleton(output_text, CustomizationStep.STEP_10)
         structural = check_fidelity(
             customization.step10_skeleton,
@@ -381,10 +391,20 @@ def cmd_customize(args: argparse.Namespace) -> int:
         judge_passed, judge_reason = apply_fidelity_judge_response(fidelity_response)
         final = apply_judge_layer(structural, judge_passed, judge_reason)
         customization.step10_fidelity = final
-        store.save(state)
         if not final.overall:
+            store.save(state)
             print(f"HALT: fidelity check failed at layer 2: {judge_reason}", file=sys.stderr)
             return exit_codes.HALT
+
+        # Both layers passed on the plain body -- promote to the live subagent registry. Frontmatter-
+        # wrapping is pure post-processing (SS1, SS6.1a): fixed configuration written from constants,
+        # never itself fidelity-checked, since nothing in it is drafted content. step10_output_path's
+        # MEANING is unchanged ("where the fidelity-checked output landed") -- only what kind of file
+        # lives there changes, and only now, at the moment it actually lands.
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        subagent_path.write_text(render_step10_subagent(output_text), encoding="utf-8")
+        customization.step10_output_path = str(subagent_path)
+        store.save(state)
 
     print(f"step10 customized successfully: {customization.step10_output_path}")
     return exit_codes.OK
