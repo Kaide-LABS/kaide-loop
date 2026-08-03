@@ -146,7 +146,69 @@ def test_customization_state_round_trips(tmp_path: Path) -> None:
     reloaded = store.load()
 
     assert reloaded.customization is not None
+    assert reloaded.customization.step10_skeleton is not None
     assert reloaded.customization.step10_skeleton.sections == ["ROLE", "1. FIRST"]
     assert reloaded.customization.step10_fidelity is not None
     assert reloaded.customization.step10_fidelity.overall is True
+
+
+def test_step11_step12_customization_state_round_trips(tmp_path: Path) -> None:
+    """CUSTOMIZATION_PHASE_2_SPEC.md SS2: step11_*/step12_* mirror step10_* exactly -- checked
+    directly, same discipline as Phase 1's own round-trip test."""
+    from loopr.models.customization import CustomizationState, FidelityResult, TemplateSkeleton
+
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path))
+    state.customization = CustomizationState(
+        step10_template_path=str(tmp_path / "STEP_10"),
+        step10_skeleton=TemplateSkeleton(convention="all_caps", sections=["ROLE", "1. FIRST"]),
+        step10_output_path=str(tmp_path / "step10-out.md"),
+        step10_fidelity=FidelityResult(structural_pass=True, judge_pass=True, overall=True, detail="ok"),
+        step11_template_path=str(tmp_path / "STEP _11"),
+        step11_skeleton=TemplateSkeleton(convention="markdown_h2", sections=["## ROLE"]),
+        step11_output_path=str(tmp_path / "step11-out.md"),
+        step11_fidelity=FidelityResult(structural_pass=True, judge_pass=True, overall=True, detail="ok11"),
+        step12_template_path=str(tmp_path / "step_12"),
+        step12_skeleton=TemplateSkeleton(convention="markdown_h2_h3", sections=["## ROLE", "### SUB"]),
+        step12_output_path=str(tmp_path / "step12-out.md"),
+        step12_fidelity=FidelityResult(structural_pass=True, judge_pass=True, overall=True, detail="ok12"),
+    )
+    store = StateStore(tmp_path / "state.json")
+    store.save(state)
+    reloaded = store.load()
+
+    assert reloaded.customization is not None
+    c = reloaded.customization
+    assert c.step11_skeleton is not None and c.step11_skeleton.sections == ["## ROLE"]
+    assert c.step11_fidelity is not None and c.step11_fidelity.detail == "ok11"
+    assert c.step12_skeleton is not None and c.step12_skeleton.sections == ["## ROLE", "### SUB"]
+    assert c.step12_fidelity is not None and c.step12_fidelity.detail == "ok12"
+
+
+def test_customization_state_supports_step11_without_step10_populated(tmp_path: Path) -> None:
+    """CUSTOMIZATION_PHASE_1_SPEC.md SS4.4's hard topology-independence constraint, concretely: a
+    state customizing step11 need not have customized step10 in the SAME state at all (step10 may
+    have been customized and executed via a wholly separate session/state file) -- step10_template_path
+    /step10_skeleton must be constructible as absent, not required, or this legitimate case couldn't
+    be represented. Regression for the model fix made while building CUSTOMIZATION_PHASE_2_SPEC.md."""
+    from loopr.models.customization import CustomizationState, FidelityResult, TemplateSkeleton
+
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path))
+    state.customization = CustomizationState(
+        step11_template_path=str(tmp_path / "STEP _11"),
+        step11_skeleton=TemplateSkeleton(convention="markdown_h2", sections=["## ROLE"]),
+        step11_output_path=str(tmp_path / "step11-out.md"),
+        step11_fidelity=FidelityResult(structural_pass=True, judge_pass=True, overall=True, detail="ok"),
+    )
+    assert state.customization.step10_template_path is None
+    assert state.customization.step10_skeleton is None
+
+    store = StateStore(tmp_path / "state.json")
+    store.save(state)
+    reloaded = store.load()
+
+    assert reloaded.customization is not None
+    assert reloaded.customization.step10_template_path is None
+    assert reloaded.customization.step10_skeleton is None
+    assert reloaded.customization.step11_skeleton is not None
+    assert reloaded.customization.step11_skeleton.sections == ["## ROLE"]
     assert reloaded == state

@@ -199,6 +199,46 @@ def test_customize_step11_refuses_when_step10_only_customized_not_executed(tmp_p
     assert not subagent_path.exists()
 
 
+def test_customize_step11_refusal_does_not_clear_an_unrelated_pending_step10_request(
+    tmp_path: Path,
+) -> None:
+    """Regression: the SS1.1 gate check must run BEFORE any pending-file mutation. A refused
+    `--step 11` call must never destroy a genuinely in-flight step10 judge request that just
+    happens to be pending at the same moment -- confirmed by driving step10 to JUDGE_REQUIRED first,
+    then attempting (and being refused for) step11, then confirming step10's own pending request is
+    still exactly where it was."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _seed_real_step11_template(repo)
+    templates_dir = repo / "prompts" / "Template_prompts"
+    (templates_dir / "STEP_10").write_text(
+        "STEP 10 TITLE\n\nROLE\n\nAct as an architect for [PROJECT_NAME].\n\n"
+        "1. FIRST SECTION\n\nDo the first thing.\n\n2. SECOND SECTION\n\nDo the second thing.\n",
+        encoding="utf-8",
+    )
+    # Deliberately NOT seeding step10 execution artifacts -- step11 must be refused below.
+    state_path = tmp_path / "state.json"
+    assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
+    store = StateStore(state_path)
+    _drive_to_complete(state_path, store.dir, tmp_path)
+
+    code = main(["customize", "--state", str(state_path), "--step", "10"])
+    assert code == exit_codes.JUDGE_REQUIRED
+    pending_path = store.dir / "pending_judge.json"
+    assert pending_path.exists()
+    step10_request_before = json.loads(pending_path.read_text(encoding="utf-8"))
+    assert step10_request_before["call_type"] == "step10_customization"
+
+    code = main(["customize", "--state", str(state_path), "--step", "11"])
+    assert code == exit_codes.HALT
+
+    assert pending_path.exists(), (
+        "step10's pending judge request was deleted by a refused, unrelated --step 11 call"
+    )
+    step10_request_after = json.loads(pending_path.read_text(encoding="utf-8"))
+    assert step10_request_after == step10_request_before
+
+
 def test_customize_step11_produces_fidelity_verified_subagent_with_real_phase_count(
     confirmed_state_with_step10_executed: tuple[Path, Path], tmp_path: Path
 ) -> None:

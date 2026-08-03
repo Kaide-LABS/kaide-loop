@@ -456,10 +456,33 @@ def _cmd_customize_step10(args: argparse.Namespace) -> int:
     return exit_codes.OK
 
 
+def _step10_execution_gate_message(step: int, repo_root: Path) -> str | None:
+    """CUSTOMIZATION_PHASE_2_SPEC.md SS1.1, shared by step11 and step12. Returns an error message if
+    step10 has not actually EXECUTED in the target project, else None. Checked BEFORE
+    _customize_preamble runs (not after) so a refusal here never clears an unrelated, genuinely
+    pending judge/gate/question file belonging to a different step's in-flight call --
+    _customize_preamble's own _clear_pending is unconditional once invoked, and step11/step12 add a
+    failure path step10 alone never had."""
+    if find_step10_execution_artifacts(repo_root) is not None:
+        return None
+    return (
+        f"refusing to customize step{step}: step10 has not actually executed in this project -- no "
+        "modernised PRD (a *.md file with a '## MODERNIZATION CHANGELOG' section) and/or no "
+        "PHASE_1_SPEC.md found at repo root. Customizing step10 (a fidelity-passing PROMPT) is "
+        "not the same as RUNNING it against the project (CUSTOMIZATION_PHASE_2_SPEC.md SS1.1)."
+    )
+
+
 def _cmd_customize_step11(args: argparse.Namespace) -> int:
     """Implements CUSTOMIZATION_PHASE_2_SPEC.md SS1, SS6.1a's extension to step11. Mirrors
     _cmd_customize_step10 exactly, plus the SS1.1 gating condition: refuses to run unless step10 has
     actually EXECUTED in the target project (real artifacts on disk), not merely been customized."""
+    early_repo_root = Path(StateStore(Path(args.state)).load().repo_root)
+    gate_message = _step10_execution_gate_message(11, early_repo_root)
+    if gate_message is not None:
+        print(gate_message, file=sys.stderr)
+        return exit_codes.HALT
+
     preamble = _customize_preamble(args)
     if isinstance(preamble, int):
         return preamble
@@ -467,15 +490,7 @@ def _cmd_customize_step11(args: argparse.Namespace) -> int:
 
     repo_root = Path(state.repo_root)
     artifacts = find_step10_execution_artifacts(repo_root)
-    if artifacts is None:
-        print(
-            "refusing to customize step11: step10 has not actually executed in this project -- no "
-            "modernised PRD (a *.md file with a '## MODERNIZATION CHANGELOG' section) and/or no "
-            "PHASE_1_SPEC.md found at repo root. Customizing step10 (a fidelity-passing PROMPT) is "
-            "not the same as RUNNING it against the project (CUSTOMIZATION_PHASE_2_SPEC.md SS1.1).",
-            file=sys.stderr,
-        )
-        return exit_codes.HALT
+    assert artifacts is not None  # already confirmed by the early gate check above
     _prd_path, phase_1_spec_path = artifacts
     phase_1_spec_text = phase_1_spec_path.read_text(encoding="utf-8")
 
@@ -564,6 +579,12 @@ def _cmd_customize_step12(args: argparse.Namespace) -> int:
     """Implements CUSTOMIZATION_PHASE_2_SPEC.md SS1, SS6.1a's extension to step12. Mirrors
     _cmd_customize_step11 exactly (same SS1.1 gate, step10 does not distinguish step11 from step12
     readiness -- both depend only on step10's output, per SS4)."""
+    early_repo_root = Path(StateStore(Path(args.state)).load().repo_root)
+    gate_message = _step10_execution_gate_message(12, early_repo_root)
+    if gate_message is not None:
+        print(gate_message, file=sys.stderr)
+        return exit_codes.HALT
+
     preamble = _customize_preamble(args)
     if isinstance(preamble, int):
         return preamble
@@ -571,15 +592,7 @@ def _cmd_customize_step12(args: argparse.Namespace) -> int:
 
     repo_root = Path(state.repo_root)
     artifacts = find_step10_execution_artifacts(repo_root)
-    if artifacts is None:
-        print(
-            "refusing to customize step12: step10 has not actually executed in this project -- no "
-            "modernised PRD (a *.md file with a '## MODERNIZATION CHANGELOG' section) and/or no "
-            "PHASE_1_SPEC.md found at repo root. Customizing step10 (a fidelity-passing PROMPT) is "
-            "not the same as RUNNING it against the project (CUSTOMIZATION_PHASE_2_SPEC.md SS1.1).",
-            file=sys.stderr,
-        )
-        return exit_codes.HALT
+    assert artifacts is not None  # already confirmed by the early gate check above
     _prd_path, phase_1_spec_path = artifacts
     phase_1_spec_text = phase_1_spec_path.read_text(encoding="utf-8")
 
