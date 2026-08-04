@@ -129,7 +129,11 @@ def _names_prd_as_provenance(text: str, prd_filename: str) -> bool:
     return bool(pattern.search(text))
 
 
-def find_step10_execution_artifacts(repo_root: Path) -> tuple[Path, Path] | None:
+def find_step10_execution_artifacts(
+    repo_root: Path,
+    prd_path_override: Path | None = None,
+    phase_1_spec_path_override: Path | None = None,
+) -> tuple[Path, Path] | None:
     """The SS1.1 gating condition, checked directly against real files: `loopr customize --step 11`
     and `--step 12` must refuse to run unless step10 has actually EXECUTED in the target project, not
     merely been customized (a fidelity-passing step10 PROMPT is not the same as step10 having been
@@ -162,16 +166,37 @@ def find_step10_execution_artifacts(repo_root: Path) -> tuple[Path, Path] | None
           to state, and what this project's own CUSTOMIZATION_PHASE_3_SPEC.md does in its opening
           line: "Built FROM the modernised `loopr-PRD.md`...").
     Exactly one *.md file (other than the PRD itself) passing both: that is the Phase-N spec. Zero or
-    more than one: Step10ArtifactAmbiguityError, never a recency guess or any other tiebreak."""
+    more than one: Step10ArtifactAmbiguityError, never a recency guess or any other tiebreak.
+
+    OVERRIDES (2026-08-04, `--modernized-prd-path` / `--phase-1-spec-path`): a mature repo can
+    legitimately carry more than one valid phase-spec artifact permanently (confirmed live: this
+    project's own repo has both PHASE_1_SPEC.md and CUSTOMIZATION_PHASE_3_SPEC.md, each a genuine,
+    independently "built from loopr-PRD.md" document from a different point in its layered history)
+    -- that is a standing, recurring situation, not a one-time filesystem cleanup to resolve and
+    forget. `prd_path_override`/`phase_1_spec_path_override`, when given, are used DIRECTLY for their
+    half, skipping that half's auto-detection entirely -- an explicit human assertion is trusted, not
+    re-verified against the heuristic it overrides. The half left unoverridden still runs its real
+    auto-detection exactly as documented above; in particular, phase-spec auto-detection (when not
+    itself overridden) checks provenance against whichever PRD path was ultimately used, whether that
+    PRD path came from auto-detection or from prd_path_override. Step10ArtifactAmbiguityError still
+    fires only for a half that is genuinely ambiguous AND not overridden."""
     md_files = [path for path in sorted(repo_root.glob("*.md")) if path.is_file()]
 
-    prd_path: Path | None = None
-    for candidate in md_files:
-        if _has_modernization_changelog_heading(candidate.read_text(encoding="utf-8")):
-            prd_path = candidate
-            break
-    if prd_path is None:
-        return None
+    prd_path: Path
+    if prd_path_override is not None:
+        prd_path = prd_path_override
+    else:
+        detected_prd_path: Path | None = None
+        for candidate in md_files:
+            if _has_modernization_changelog_heading(candidate.read_text(encoding="utf-8")):
+                detected_prd_path = candidate
+                break
+        if detected_prd_path is None:
+            return None
+        prd_path = detected_prd_path
+
+    if phase_1_spec_path_override is not None:
+        return prd_path, phase_1_spec_path_override
 
     structural_candidates = [
         candidate
@@ -193,13 +218,15 @@ def find_step10_execution_artifacts(repo_root: Path) -> tuple[Path, Path] | None
             f"'Phase Plan Header' heading and names {prd_path.name} as its source -- structural "
             f"candidates checked: {sorted(c.name for c in structural_candidates)}. step10 may not "
             "have produced its Phase-N-spec deliverable yet, or it was written without provenance "
-            "back to the PRD; resolve manually, do not guess."
+            "back to the PRD; resolve manually with --phase-1-spec-path, do not guess."
         )
 
     raise Step10ArtifactAmbiguityError(
         f"modernised PRD found ({prd_path.name}), but more than one *.md file at {repo_root} both "
         f"carries a 'Phase Plan Header' heading and names {prd_path.name} as its source -- colliding "
-        f"candidates: {sorted(c.name for c in provenance_matches)}. Resolve manually, do not guess."
+        f"candidates: {sorted(c.name for c in provenance_matches)}. Resolve manually with "
+        "--phase-1-spec-path (and --modernized-prd-path, if the PRD half is also ambiguous), do not "
+        "guess."
     )
 
 

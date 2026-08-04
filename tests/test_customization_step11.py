@@ -405,3 +405,202 @@ def test_step11_judge_request_never_carries_frontmatter_content(
     fidelity_request_raw = (state_path.parent / "pending_judge.json").read_text(encoding="utf-8")
     assert f"name: {STEP11_SUBAGENT_NAME}" not in fidelity_request_raw
     assert f"model: {STEP11_SUBAGENT_MODEL}" not in fidelity_request_raw
+
+
+# ============================================================================
+# 2026-08-04: manual override flags for find_step10_execution_artifacts' ambiguity HALT.
+# --modernized-prd-path / --phase-1-spec-path close the practical gap the prior fix correctly
+# surfaced -- a genuine, standing ambiguity (this repo has BOTH PHASE_1_SPEC.md and
+# CUSTOMIZATION_PHASE_3_SPEC.md legitimately claiming provenance from loopr-PRD.md) with no way for
+# a human to say which one they mean. PHASE_1_SPEC.md stays exactly where it is, untouched.
+# ============================================================================
+
+_REAL_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REAL_STATE_JSON = _REAL_REPO_ROOT / ".loopr-state" / "state.json"
+
+
+def _copy_real_confirmed_state(tmp_path: Path) -> Path:
+    """Copies THIS repo's own real, confirmed (six-conditions-satisfied) state file into an isolated
+    tmp_path -- StateStore derives its working directory (pending_judge.json etc.) from the state
+    file's own parent, so this never touches the real .loopr-state/ directory. repo_root inside the
+    copied state still points at this repo's real root, so find_step10_execution_artifacts scans the
+    real, live file set -- the genuine ambiguity this fix closes, not a synthetic stand-in."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(_REAL_STATE_JSON.read_text(encoding="utf-8"), encoding="utf-8")
+    return state_path
+
+
+@pytest.mark.skipif(not _REAL_STATE_JSON.is_file(), reason="this repo's own real confirmed state is not present")
+def test_customize_step11_without_override_still_halts_on_real_repo_ambiguity(tmp_path: Path) -> None:
+    """Regression for the override mechanism NOT weakening the no-override case: against this repo's
+    actual real state, with no override flags, the genuine PHASE_1_SPEC.md /
+    CUSTOMIZATION_PHASE_3_SPEC.md ambiguity the prior fix surfaced must still HALT, naming both
+    colliding candidates."""
+    state_path = _copy_real_confirmed_state(tmp_path)
+    code = main(["customize", "--state", str(state_path), "--step", "11"])
+    assert code == exit_codes.HALT
+
+
+@pytest.mark.skipif(not _REAL_STATE_JSON.is_file(), reason="this repo's own real confirmed state is not present")
+def test_customize_step11_phase_1_spec_path_override_against_real_repo_state(tmp_path: Path) -> None:
+    """The concrete regression the directive demands: against this repo's actual real state, which
+    genuinely HALTs without the flag, --phase-1-spec-path unblocks it -- and the phase_1_spec_text
+    that actually reaches the judge is CUSTOMIZATION_PHASE_3_SPEC.md's real content, not
+    PHASE_1_SPEC.md's (asserted by content, not just absence of HALT)."""
+    state_path = _copy_real_confirmed_state(tmp_path)
+    override_path = _REAL_REPO_ROOT / "CUSTOMIZATION_PHASE_3_SPEC.md"
+
+    code = main(
+        [
+            "customize",
+            "--state",
+            str(state_path),
+            "--step",
+            "11",
+            "--phase-1-spec-path",
+            str(override_path),
+        ]
+    )
+    assert code == exit_codes.JUDGE_REQUIRED
+    request = json.loads((state_path.parent / "pending_judge.json").read_text(encoding="utf-8"))
+    assert request["call_type"] == "step11_customization"
+    phase_1_spec_text = request["inputs"]["phase_1_spec_text"]
+    assert "Dispatch Controller (Phase 3 of 3)" in phase_1_spec_text  # CUSTOMIZATION_PHASE_3_SPEC.md's own title
+    assert "loopr standalone spec-discipline module" not in phase_1_spec_text  # NOT PHASE_1_SPEC.md's
+
+
+def test_customize_step11_full_override_both_flags(tmp_path: Path) -> None:
+    """Both flags supplied together -- both halves of find_step10_execution_artifacts skip
+    auto-detection entirely, trusting the explicit human assertion for each."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _seed_real_step11_template(repo)
+    (repo / "my-custom-prd.md").write_text("# PRD\n\nno changelog heading here at all\n", encoding="utf-8")
+    (repo / "my-custom-spec.md").write_text(
+        "# Spec\n\nno Phase Plan Header, no provenance claim -- would fail auto-detection either way\n",
+        encoding="utf-8",
+    )
+    state_path = tmp_path / "state.json"
+    assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
+    store = StateStore(state_path)
+    _drive_to_complete(state_path, store.dir, tmp_path)
+
+    code = main(
+        [
+            "customize",
+            "--state",
+            str(state_path),
+            "--step",
+            "11",
+            "--modernized-prd-path",
+            str(repo / "my-custom-prd.md"),
+            "--phase-1-spec-path",
+            str(repo / "my-custom-spec.md"),
+        ]
+    )
+    assert code == exit_codes.JUDGE_REQUIRED
+    request = json.loads((store.dir / "pending_judge.json").read_text(encoding="utf-8"))
+    assert "no Phase Plan Header, no provenance claim" in request["inputs"]["phase_1_spec_text"]
+
+
+def test_customize_step11_partial_override_prd_only_spec_still_auto_detected(tmp_path: Path) -> None:
+    """Only --modernized-prd-path supplied -- the PRD half is trusted directly (skipping its own
+    heading-line auto-detection, so a PRD file with no real changelog heading still works), while the
+    Phase-N-spec half still runs real auto-detection, using the OVERRIDDEN prd path as its provenance
+    target."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _seed_real_step11_template(repo)
+    (repo / "my-custom-prd.md").write_text("# PRD\n\nno changelog heading -- trusted via override\n", encoding="utf-8")
+    (repo / "REAL_SPEC.md").write_text(
+        "## SS0 Phase Plan Header\n\nBuilt FROM the modernised `my-custom-prd.md`.\n\n**Phase 1 of 2.**\n",
+        encoding="utf-8",
+    )
+    state_path = tmp_path / "state.json"
+    assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
+    store = StateStore(state_path)
+    _drive_to_complete(state_path, store.dir, tmp_path)
+
+    code = main(
+        [
+            "customize",
+            "--state",
+            str(state_path),
+            "--step",
+            "11",
+            "--modernized-prd-path",
+            str(repo / "my-custom-prd.md"),
+        ]
+    )
+    assert code == exit_codes.JUDGE_REQUIRED
+    request = json.loads((store.dir / "pending_judge.json").read_text(encoding="utf-8"))
+    assert "Phase 1 of 2" in request["inputs"]["phase_1_spec_text"]
+
+
+def test_customize_step10_rejects_modernized_prd_path_override(tmp_path: Path) -> None:
+    """step10 PRODUCES its artifacts, it does not consume them -- supplying --modernized-prd-path
+    with --step 10 is a clear, immediate misuse error, never a silently ignored flag."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    templates_dir = repo / "prompts" / "Template_prompts"
+    templates_dir.mkdir(parents=True)
+    (templates_dir / "STEP_10").write_text("ROLE\n\nAct as an architect.\n\n1. A\n\nDo A.\n", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
+
+    code = main(
+        [
+            "customize",
+            "--state",
+            str(state_path),
+            "--step",
+            "10",
+            "--modernized-prd-path",
+            str(tmp_path / "whatever.md"),
+        ]
+    )
+    assert code == exit_codes.HALT
+
+
+def test_customize_step10_rejects_phase_1_spec_path_override(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    templates_dir = repo / "prompts" / "Template_prompts"
+    templates_dir.mkdir(parents=True)
+    (templates_dir / "STEP_10").write_text("ROLE\n\nAct as an architect.\n\n1. A\n\nDo A.\n", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
+
+    code = main(
+        [
+            "customize",
+            "--state",
+            str(state_path),
+            "--step",
+            "10",
+            "--phase-1-spec-path",
+            str(tmp_path / "whatever.md"),
+        ]
+    )
+    assert code == exit_codes.HALT
+
+
+def test_customize_step11_override_path_that_does_not_exist_errors_clearly(
+    confirmed_state_with_step10_executed: tuple[Path, Path],
+) -> None:
+    """A supplied override path that does not exist must error clearly and immediately -- never a
+    raw stack trace, never a silent fallback to auto-detection as though the flag hadn't been given."""
+    _repo, state_path = confirmed_state_with_step10_executed
+
+    code = main(
+        [
+            "customize",
+            "--state",
+            str(state_path),
+            "--step",
+            "11",
+            "--phase-1-spec-path",
+            str(state_path.parent / "does-not-exist.md"),
+        ]
+    )
+    assert code == exit_codes.HALT

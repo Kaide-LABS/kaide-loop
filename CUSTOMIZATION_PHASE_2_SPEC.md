@@ -36,12 +36,36 @@ real templates:
 ### 1.1 Gating condition
 
 `loopr customize --step 11` and `--step 12` must refuse to run unless step10 has produced its two
-real deliverables in the target project: a modernised PRD and `PHASE_1_SPEC.md` (Deliverable A and B
-per the step10 template's own §4/§5). **Customizing step10 is not the same as running it** —
+real deliverables in the target project: a modernised PRD and its Phase-N-spec companion (Deliverable
+A and B per the step10 template's own §4/§5). **Customizing step10 is not the same as running it** —
 Phase 1 produces a prompt; running that prompt against a real project is what produces the artifacts
 this phase reads. Check for their existence directly; do not infer readiness from
 `CustomizationState.step10_fidelity` alone, which only proves the *prompt* was well-formed, not that
 it was ever executed.
+
+Neither deliverable is a fixed filename in practice (2026-08-04 review patch, confirmed live against
+this project's own dogfooding repo): the modernised PRD is detected by content — the first `*.md` file
+at repo root carrying a real `"## MODERNIZATION CHANGELOG"` heading LINE (a raw substring match is not
+sufficient; a file that only *mentions* the heading in prose, documenting this very mechanism, must
+not count). Its Phase-N-spec companion is detected by two independent, real-content signals combined:
+a structural `"Phase Plan Header"` heading line, AND an explicit "built from" provenance claim naming
+the detected PRD's own filename. Neither signal alone is trusted — a single weak signal (a fixed
+filename, or a loose substring/mention check) is exactly the failure mode this detection replaced. If
+either half cannot be uniquely determined this way — zero or more than one real candidate — the gate
+raises an ambiguity error naming every candidate found, rather than guessing (e.g. via "most recently
+modified").
+
+**Manual override, `--modernized-prd-path` / `--phase-1-spec-path` (2026-08-04):** a mature repo can
+legitimately carry more than one valid phase-spec artifact permanently — this project's own repo does,
+with both a stale-but-real Phase 1 module spec and the actual Phase 3 dispatch-controller spec this
+run produced, each independently and correctly claiming provenance from the same PRD. That is a
+standing situation a tool must let a human resolve, not a one-time filesystem cleanup. `loopr customize
+--step 11/12` accepts either or both flags, pointing directly at the intended file for that half;
+the overridden half skips its own auto-detection (including re-verifying it against the heuristic it
+overrides — an explicit human assertion is trusted), while any non-overridden half still runs real
+auto-detection exactly as above. Supplying either flag together with `--step 10` is a misuse error —
+step10 *produces* these artifacts, it does not consume them — and a supplied path that does not exist
+or is not a file errors clearly and immediately, never a silent fallback to auto-detection.
 
 ### 1.2 What step10's output actually resolves, verified per-token, not assumed
 

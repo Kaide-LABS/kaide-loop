@@ -307,10 +307,51 @@ def cmd_customize(args: argparse.Namespace) -> int:
     of attributes, not a generic/reflective lookup, so each handler addresses its own fields directly
     rather than through an abstraction that would defeat mypy --strict's field-level checking."""
     if args.step == 10:
+        if args.modernized_prd_path:
+            print(
+                "refusing to customize step10: --modernized-prd-path is invalid here -- step10 "
+                "PRODUCES this artifact, it does not consume it. This flag applies to --step 11/12 "
+                "only.",
+                file=sys.stderr,
+            )
+            return exit_codes.HALT
+        if args.phase_1_spec_path:
+            print(
+                "refusing to customize step10: --phase-1-spec-path is invalid here -- step10 "
+                "PRODUCES this artifact, it does not consume it. This flag applies to --step 11/12 "
+                "only.",
+                file=sys.stderr,
+            )
+            return exit_codes.HALT
         return _cmd_customize_step10(args)
     if args.step == 11:
         return _cmd_customize_step11(args)
     return _cmd_customize_step12(args)
+
+
+def _resolve_step10_artifact_overrides(
+    args: argparse.Namespace,
+) -> tuple[Path | None, Path | None] | str:
+    """Validates and resolves --modernized-prd-path / --phase-1-spec-path (step11/step12 only) into
+    Path overrides for find_step10_execution_artifacts. Returns (prd_override, phase_1_spec_override)
+    -- either or both may be None -- on success, or an error message string to print and HALT on if a
+    supplied path does not exist or is not a file. Never a raw stack trace, never a silent fallback to
+    auto-detection as though the flag hadn't been given."""
+    prd_override: Path | None = None
+    if args.modernized_prd_path:
+        candidate = Path(args.modernized_prd_path)
+        if not candidate.is_file():
+            return f"--modernized-prd-path {args.modernized_prd_path!r} does not exist or is not a file"
+        prd_override = candidate
+
+    phase_1_spec_override: Path | None = None
+    if args.phase_1_spec_path:
+        candidate = Path(args.phase_1_spec_path)
+        if not candidate.is_file():
+            return f"--phase-1-spec-path {args.phase_1_spec_path!r} does not exist or is not a file"
+        phase_1_spec_override = candidate
+
+    return prd_override, phase_1_spec_override
 
 
 def _customize_preamble(
@@ -457,15 +498,24 @@ def _cmd_customize_step10(args: argparse.Namespace) -> int:
     return exit_codes.OK
 
 
-def _step10_execution_gate_message(step: int, repo_root: Path) -> str | None:
+def _step10_execution_gate_message(
+    step: int,
+    repo_root: Path,
+    prd_path_override: Path | None = None,
+    phase_1_spec_path_override: Path | None = None,
+) -> str | None:
     """CUSTOMIZATION_PHASE_2_SPEC.md SS1.1, shared by step11 and step12. Returns an error message if
     step10 has not actually EXECUTED in the target project, else None. Checked BEFORE
     _customize_preamble runs (not after) so a refusal here never clears an unrelated, genuinely
     pending judge/gate/question file belonging to a different step's in-flight call --
     _customize_preamble's own _clear_pending is unconditional once invoked, and step11/step12 add a
-    failure path step10 alone never had."""
+    failure path step10 alone never had. The two overrides (2026-08-04) are threaded straight through
+    to find_step10_execution_artifacts -- the caller must pass the SAME resolved values here and at
+    its later re-lookup, or the early gate could pass while the real lookup afterward disagrees."""
     try:
-        artifacts = find_step10_execution_artifacts(repo_root)
+        artifacts = find_step10_execution_artifacts(
+            repo_root, prd_path_override, phase_1_spec_path_override
+        )
     except Step10ArtifactAmbiguityError as exc:
         return f"refusing to customize step{step}: {exc}"
     if artifacts is not None:
@@ -474,7 +524,9 @@ def _step10_execution_gate_message(step: int, repo_root: Path) -> str | None:
         f"refusing to customize step{step}: step10 has not actually executed in this project -- no "
         "modernised PRD (a *.md file with a '## MODERNIZATION CHANGELOG' heading line) found at "
         "repo root. Customizing step10 (a fidelity-passing PROMPT) is not the same as RUNNING it "
-        "against the project (CUSTOMIZATION_PHASE_2_SPEC.md SS1.1)."
+        "against the project (CUSTOMIZATION_PHASE_2_SPEC.md SS1.1). If step10's real deliverables "
+        "exist but aren't auto-detectable, point at them directly with --modernized-prd-path / "
+        "--phase-1-spec-path."
     )
 
 
@@ -482,8 +534,14 @@ def _cmd_customize_step11(args: argparse.Namespace) -> int:
     """Implements CUSTOMIZATION_PHASE_2_SPEC.md SS1, SS6.1a's extension to step11. Mirrors
     _cmd_customize_step10 exactly, plus the SS1.1 gating condition: refuses to run unless step10 has
     actually EXECUTED in the target project (real artifacts on disk), not merely been customized."""
+    overrides = _resolve_step10_artifact_overrides(args)
+    if isinstance(overrides, str):
+        print(f"refusing to customize step11: {overrides}", file=sys.stderr)
+        return exit_codes.HALT
+    prd_override, phase_1_spec_override = overrides
+
     early_repo_root = Path(StateStore(Path(args.state)).load().repo_root)
-    gate_message = _step10_execution_gate_message(11, early_repo_root)
+    gate_message = _step10_execution_gate_message(11, early_repo_root, prd_override, phase_1_spec_override)
     if gate_message is not None:
         print(gate_message, file=sys.stderr)
         return exit_codes.HALT
@@ -494,7 +552,7 @@ def _cmd_customize_step11(args: argparse.Namespace) -> int:
     store, state, state_dir, judge_p, client = preamble
 
     repo_root = Path(state.repo_root)
-    artifacts = find_step10_execution_artifacts(repo_root)
+    artifacts = find_step10_execution_artifacts(repo_root, prd_override, phase_1_spec_override)
     assert artifacts is not None  # already confirmed by the early gate check above
     _prd_path, phase_1_spec_path = artifacts
     phase_1_spec_text = phase_1_spec_path.read_text(encoding="utf-8")
@@ -584,8 +642,14 @@ def _cmd_customize_step12(args: argparse.Namespace) -> int:
     """Implements CUSTOMIZATION_PHASE_2_SPEC.md SS1, SS6.1a's extension to step12. Mirrors
     _cmd_customize_step11 exactly (same SS1.1 gate, step10 does not distinguish step11 from step12
     readiness -- both depend only on step10's output, per SS4)."""
+    overrides = _resolve_step10_artifact_overrides(args)
+    if isinstance(overrides, str):
+        print(f"refusing to customize step12: {overrides}", file=sys.stderr)
+        return exit_codes.HALT
+    prd_override, phase_1_spec_override = overrides
+
     early_repo_root = Path(StateStore(Path(args.state)).load().repo_root)
-    gate_message = _step10_execution_gate_message(12, early_repo_root)
+    gate_message = _step10_execution_gate_message(12, early_repo_root, prd_override, phase_1_spec_override)
     if gate_message is not None:
         print(gate_message, file=sys.stderr)
         return exit_codes.HALT
@@ -596,7 +660,7 @@ def _cmd_customize_step12(args: argparse.Namespace) -> int:
     store, state, state_dir, judge_p, client = preamble
 
     repo_root = Path(state.repo_root)
-    artifacts = find_step10_execution_artifacts(repo_root)
+    artifacts = find_step10_execution_artifacts(repo_root, prd_override, phase_1_spec_override)
     assert artifacts is not None  # already confirmed by the early gate check above
     _prd_path, phase_1_spec_path = artifacts
     phase_1_spec_text = phase_1_spec_path.read_text(encoding="utf-8")
@@ -720,6 +784,12 @@ def _build_parser() -> argparse.ArgumentParser:
     customize_p.add_argument("--step", type=int, required=True, choices=[10, 11, 12])
     customize_p.add_argument("--out", default=None)
     customize_p.add_argument("--judge-response", default=None)
+    # Manual override for find_step10_execution_artifacts' SS1.1 gate (2026-08-04): --step 11/12
+    # only -- step10 PRODUCES these artifacts, it does not consume them (validated in cmd_customize).
+    # A mature repo can legitimately carry more than one valid phase-spec artifact permanently, so
+    # this is a standing override, not a one-time cleanup flag.
+    customize_p.add_argument("--modernized-prd-path", default=None)
+    customize_p.add_argument("--phase-1-spec-path", default=None)
     customize_p.set_defaults(func=cmd_customize)
 
     return parser
