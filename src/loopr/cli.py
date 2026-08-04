@@ -39,6 +39,7 @@ from loopr.customization.customize import (
 )
 from loopr.customization.fidelity import apply_judge_layer, check_fidelity
 from loopr.customization.templates import (
+    Step10ArtifactAmbiguityError,
     discover_template,
     extract_skeleton,
     find_gap_candidates,
@@ -463,13 +464,17 @@ def _step10_execution_gate_message(step: int, repo_root: Path) -> str | None:
     pending judge/gate/question file belonging to a different step's in-flight call --
     _customize_preamble's own _clear_pending is unconditional once invoked, and step11/step12 add a
     failure path step10 alone never had."""
-    if find_step10_execution_artifacts(repo_root) is not None:
+    try:
+        artifacts = find_step10_execution_artifacts(repo_root)
+    except Step10ArtifactAmbiguityError as exc:
+        return f"refusing to customize step{step}: {exc}"
+    if artifacts is not None:
         return None
     return (
         f"refusing to customize step{step}: step10 has not actually executed in this project -- no "
-        "modernised PRD (a *.md file with a '## MODERNIZATION CHANGELOG' section) and/or no "
-        "PHASE_1_SPEC.md found at repo root. Customizing step10 (a fidelity-passing PROMPT) is "
-        "not the same as RUNNING it against the project (CUSTOMIZATION_PHASE_2_SPEC.md SS1.1)."
+        "modernised PRD (a *.md file with a '## MODERNIZATION CHANGELOG' heading line) found at "
+        "repo root. Customizing step10 (a fidelity-passing PROMPT) is not the same as RUNNING it "
+        "against the project (CUSTOMIZATION_PHASE_2_SPEC.md SS1.1)."
     )
 
 

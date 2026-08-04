@@ -50,13 +50,16 @@ def _seed_real_step11_template(repo: Path) -> None:
 
 
 def _seed_step10_execution_artifacts(repo: Path, *, phase_count: int = 4) -> None:
-    """The SS1.1 gate's real deliverables: PHASE_1_SPEC.md (fixed filename) and a modernised PRD
-    detected by its '## MODERNIZATION CHANGELOG' section, deliberately under a NON-default filename
-    (matching this project's own real practice, verified against
+    """The SS1.1 gate's real deliverables, detected by content, not filename (2026-08-04 review
+    patch): a modernised PRD, found by a real '## MODERNIZATION CHANGELOG' heading LINE, deliberately
+    under a NON-default filename (matching this project's own real practice, verified against
     prompts/loopr/step10_prd_modernization.md -- "loopr-PRD.md", not the template's stated default
-    "ULTIMATE_PRD.md")."""
+    "ULTIMATE_PRD.md"); and its Phase-N-spec companion, found by a real 'Phase Plan Header' heading
+    line PLUS an explicit "built from" claim naming the detected PRD's filename -- PHASE_1_SPEC.md is
+    just this fixture's chosen name for it, not a filename the detector relies on."""
     (repo / "PHASE_1_SPEC.md").write_text(
-        f"# PHASE_1_SPEC.md\n\n## SS0 Phase Plan Header\n\n**Phase 1 of {phase_count}.**\n\n"
+        f"# PHASE_1_SPEC.md\n\nBuilt FROM the modernised `MY_PROJECT_PRD.md`.\n\n"
+        f"## SS0 Phase Plan Header\n\n**Phase 1 of {phase_count}.**\n\n"
         "Some blueprint content.\n",
         encoding="utf-8",
     )

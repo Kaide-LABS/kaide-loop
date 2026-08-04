@@ -50,7 +50,8 @@ def _seed_real_step12_template(repo: Path) -> None:
 
 def _seed_step10_execution_artifacts(repo: Path, *, phase_count: int = 4) -> None:
     (repo / "PHASE_1_SPEC.md").write_text(
-        f"# PHASE_1_SPEC.md\n\n## SS0 Phase Plan Header\n\n**Phase 1 of {phase_count}.**\n\n"
+        f"# PHASE_1_SPEC.md\n\nBuilt FROM the modernised `MY_PROJECT_PRD.md`.\n\n"
+        f"## SS0 Phase Plan Header\n\n**Phase 1 of {phase_count}.**\n\n"
         "Some blueprint content.\n",
         encoding="utf-8",
     )

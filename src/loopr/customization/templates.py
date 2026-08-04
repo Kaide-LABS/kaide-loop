@@ -77,8 +77,56 @@ def discover_template(repo_root: Path, step: CustomizationStep) -> Path:
     return matches[0]
 
 
-_PHASE_1_SPEC_FILENAME = "PHASE_1_SPEC.md"
 _MODERNIZATION_CHANGELOG_HEADING = "## MODERNIZATION CHANGELOG"
+
+# STEP_10's own template text (SS5, "§0 Phase Plan Header") names this section literally, with an
+# optional "##" markdown prefix and a "§0" / "SS0" section marker depending on how the executing
+# agent (or this environment's own § transcription -- verified inconsistent even within this
+# project's own real files and test fixtures: "§0" in CUSTOMIZATION_PHASE_3_SPEC.md, "SS0" is this
+# project's own established ASCII stand-in elsewhere) renders it. Matched as a heading-shaped LINE
+# (stripped, own-line, allowing that prefix), not a substring search anywhere in the file -- same
+# discipline as _has_modernization_changelog_heading below, for the same reason: a prose sentence
+# that happens to mention "Phase Plan Header" must never count.
+_PHASE_PLAN_HEADER_LINE_RE = re.compile(
+    r"^[#\s]*(?:§|SS)?\s*\d*\.?\s*Phase Plan Header\b", re.IGNORECASE
+)
+
+
+class Step10ArtifactAmbiguityError(LooprError):
+    """Raised by find_step10_execution_artifacts when a modernised PRD is confirmed present (so
+    step10 has clearly executed) but which *.md file is its Phase-N-spec companion cannot be
+    uniquely determined from real, on-disk evidence -- zero or multiple candidates carry BOTH the
+    required structural marker (a "Phase Plan Header" heading line) AND provenance naming the
+    detected PRD's own filename. A genuine ambiguity for a human to resolve, never a silent guess
+    (e.g. "most recently modified") -- that failure mode is exactly what this function replaced."""
+
+
+def _has_modernization_changelog_heading(text: str) -> bool:
+    """True only if "## MODERNIZATION CHANGELOG" appears as its OWN LINE (after stripping
+    whitespace) -- not merely as a substring anywhere in the file. A raw `in` check previously let a
+    file that only *mentions* the heading in prose (e.g. documenting this very detection mechanism,
+    or quoting it inside a blockquote) satisfy this by accident; confirmed live against this repo's
+    own CUSTOMIZATION_PHASE_3_SPEC.md, which does exactly that."""
+    return any(line.strip() == _MODERNIZATION_CHANGELOG_HEADING for line in text.splitlines())
+
+
+def _has_phase_plan_header_line(text: str) -> bool:
+    """The structural half of Phase-N-spec detection (FIX 2a): a real "Phase Plan Header" heading
+    line, not a loose substring match anywhere in the file -- same own-line discipline as
+    _has_modernization_changelog_heading above."""
+    return any(_PHASE_PLAN_HEADER_LINE_RE.match(line.strip()) for line in text.splitlines())
+
+
+def _names_prd_as_provenance(text: str, prd_filename: str) -> bool:
+    """The provenance half of Phase-N-spec detection (FIX 2b): the candidate must explicitly claim to
+    be BUILT FROM the detected PRD, not merely mention its filename somewhere incidentally (a real
+    file -- SKILL_PHASE_1_SPEC.md in this project's own repo -- names an unrelated PRD as its actual
+    provenance claim and only mentions the real modernised PRD's filename much later, in an unrelated
+    cross-reference; a bare substring check would have wrongly counted it). Requires the word "built"
+    within a short distance before the filename, tolerant of markdown emphasis/backticks and the
+    "from" that STEP_10's template instructs the agent to write in between."""
+    pattern = re.compile(r"built\b.{0,120}?" + re.escape(prd_filename), re.IGNORECASE | re.DOTALL)
+    return bool(pattern.search(text))
 
 
 def find_step10_execution_artifacts(repo_root: Path) -> tuple[Path, Path] | None:
@@ -86,30 +134,73 @@ def find_step10_execution_artifacts(repo_root: Path) -> tuple[Path, Path] | None
     and `--step 12` must refuse to run unless step10 has actually EXECUTED in the target project, not
     merely been customized (a fidelity-passing step10 PROMPT is not the same as step10 having been
     RUN against the project). Returns (modernised_prd_path, phase_1_spec_path) if both of step10's
-    real deliverables exist, else None -- never inferred from CustomizationState.step10_fidelity,
-    which only proves the prompt was well-formed.
+    real deliverables exist, None if neither does (step10 genuinely has not executed) -- never
+    inferred from CustomizationState.step10_fidelity, which only proves the prompt was well-formed.
+    Raises Step10ArtifactAmbiguityError if the PRD is found but its Phase-N-spec companion is not
+    uniquely determinable -- a real ambiguity, not something to guess past.
 
-    `PHASE_1_SPEC.md` (Deliverable B) is a fixed filename, stated literally by STEP_10's own template
-    text -- checked by exact name at repo_root. The modernised PRD (Deliverable A) is NOT a fixed
-    filename -- STEP_10's own default is "ULTIMATE_PRD.md", but that default is commonly overridden
-    (verified: this project's own real customization, prompts/loopr/step10_prd_modernization.md,
-    uses "loopr-PRD.md" instead). Detected by CONTENT instead: STEP_10's own template mandates every
-    modernised PRD carry a "## MODERNIZATION CHANGELOG" section ("Changelog. Append ## MODERNIZATION
-    CHANGELOG listing every change made...") -- the first *.md file at repo_root containing that
-    heading is treated as the modernised PRD. More robust than guessing a filename, and grounded in
-    what the template itself requires, not assumed."""
-    phase_1_spec_path = repo_root / _PHASE_1_SPEC_FILENAME
-    if not phase_1_spec_path.is_file():
+    The modernised PRD (Deliverable A) is NOT a fixed filename -- STEP_10's own default is
+    "ULTIMATE_PRD.md", but that default is commonly overridden (verified: this project's own real
+    customization uses "loopr-PRD.md" instead). Detected by CONTENT instead: STEP_10's own template
+    mandates every modernised PRD carry a "## MODERNIZATION CHANGELOG" section -- the first *.md file
+    at repo_root carrying that heading AS ITS OWN LINE (_has_modernization_changelog_heading, not a
+    raw substring check) is treated as the modernised PRD.
+
+    The Phase-N-spec (Deliverable B) is likewise NOT a fixed filename in practice: this project's own
+    dogfooding run proves it -- STEP_10's literal default, "PHASE_1_SPEC.md", was already occupied by
+    an unrelated file from loopr's own earlier core-module build, so the real Phase 3 deliverable was
+    correctly written to CUSTOMIZATION_PHASE_3_SPEC.md instead rather than clobbering it. A fixed
+    filename lookup here (the original implementation) silently paired the modernised PRD with that
+    stale, unrelated file -- no error, no HALT, just a wrong answer. Detected instead by TWO
+    independent signals combined, neither alone (a single weak signal is exactly what misfired
+    before, whether that signal is a fixed filename or a loose substring check):
+      (a) structural -- a real "Phase Plan Header" heading line (_has_phase_plan_header_line), the
+          section STEP_10's own template mandates every Phase-N spec carry.
+      (b) provenance -- the candidate's own text explicitly claims to be BUILT FROM that specific
+          PRD (_names_prd_as_provenance: "built" near the PRD's filename, not merely a bare mention
+          of the filename anywhere in the file -- exactly what STEP_10's template instructs the agent
+          to state, and what this project's own CUSTOMIZATION_PHASE_3_SPEC.md does in its opening
+          line: "Built FROM the modernised `loopr-PRD.md`...").
+    Exactly one *.md file (other than the PRD itself) passing both: that is the Phase-N spec. Zero or
+    more than one: Step10ArtifactAmbiguityError, never a recency guess or any other tiebreak."""
+    md_files = [path for path in sorted(repo_root.glob("*.md")) if path.is_file()]
+
+    prd_path: Path | None = None
+    for candidate in md_files:
+        if _has_modernization_changelog_heading(candidate.read_text(encoding="utf-8")):
+            prd_path = candidate
+            break
+    if prd_path is None:
         return None
 
-    for candidate in sorted(repo_root.glob("*.md")):
-        if candidate == phase_1_spec_path:
-            continue
-        if not candidate.is_file():
-            continue
-        if _MODERNIZATION_CHANGELOG_HEADING in candidate.read_text(encoding="utf-8"):
-            return candidate, phase_1_spec_path
-    return None
+    structural_candidates = [
+        candidate
+        for candidate in md_files
+        if candidate != prd_path and _has_phase_plan_header_line(candidate.read_text(encoding="utf-8"))
+    ]
+    provenance_matches = [
+        candidate
+        for candidate in structural_candidates
+        if _names_prd_as_provenance(candidate.read_text(encoding="utf-8"), prd_path.name)
+    ]
+
+    if len(provenance_matches) == 1:
+        return prd_path, provenance_matches[0]
+
+    if not provenance_matches:
+        raise Step10ArtifactAmbiguityError(
+            f"modernised PRD found ({prd_path.name}), but no *.md file at {repo_root} both carries a "
+            f"'Phase Plan Header' heading and names {prd_path.name} as its source -- structural "
+            f"candidates checked: {sorted(c.name for c in structural_candidates)}. step10 may not "
+            "have produced its Phase-N-spec deliverable yet, or it was written without provenance "
+            "back to the PRD; resolve manually, do not guess."
+        )
+
+    raise Step10ArtifactAmbiguityError(
+        f"modernised PRD found ({prd_path.name}), but more than one *.md file at {repo_root} both "
+        f"carries a 'Phase Plan Header' heading and names {prd_path.name} as its source -- colliding "
+        f"candidates: {sorted(c.name for c in provenance_matches)}. Resolve manually, do not guess."
+    )
 
 
 def _all_caps_core(stripped: str) -> str:

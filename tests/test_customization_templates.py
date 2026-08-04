@@ -21,6 +21,7 @@ from loopr.customization.templates import (
     STEP12_NON_PLACEHOLDER_BRACKET_TOKENS,
     STEP12_PLACEHOLDER_ALLOWLIST,
     STEP12_SECTION_DELETIONS,
+    Step10ArtifactAmbiguityError,
     TemplateDiscoveryError,
     VacuousSkeletonError,
     discover_template,
@@ -649,41 +650,136 @@ def test_angle_bracket_wide_scan_is_fully_accounted_for(step: CustomizationStep,
 
 
 # --- SS1.1 gating condition: find_step10_execution_artifacts ---
+#
+# 2026-08-04 review patch: two stacked defects found live while dogfooding this repo's own Phase 3
+# build. (1) The Phase-N-spec half used a fixed "PHASE_1_SPEC.md" filename lookup; this repo's real
+# deliverable landed at CUSTOMIZATION_PHASE_3_SPEC.md instead (to avoid clobbering an unrelated
+# PHASE_1_SPEC.md left over from loopr's own core-module build), so the fixed lookup silently paired
+# the real PRD with that stale, unrelated file. (2) The PRD half used a raw substring check for
+# "## MODERNIZATION CHANGELOG", which a file merely MENTIONING that heading in prose (documenting
+# this very mechanism) could satisfy by accident -- confirmed live: CUSTOMIZATION_PHASE_3_SPEC.md
+# does exactly that, sorts before loopr-PRD.md, and won the match. Both replaced: the PRD check is
+# now a real heading-LINE check, and the Phase-N-spec check is now two independent, real-content
+# signals (a structural "Phase Plan Header" heading line + provenance naming the detected PRD's own
+# filename) combined -- zero or multiple candidates raise Step10ArtifactAmbiguityError rather than
+# guessing (e.g. via "most recently modified").
 
 
-def test_find_step10_execution_artifacts_none_when_phase_1_spec_missing(tmp_path: Path) -> None:
-    (tmp_path / "SOME_PRD.md").write_text("## MODERNIZATION CHANGELOG\n", encoding="utf-8")
-    assert find_step10_execution_artifacts(tmp_path) is None
-
-
-def test_find_step10_execution_artifacts_none_when_no_prd_has_changelog(tmp_path: Path) -> None:
-    (tmp_path / "PHASE_1_SPEC.md").write_text("Phase 1 of 1.\n", encoding="utf-8")
+def test_find_step10_execution_artifacts_none_when_no_prd_has_changelog_heading(tmp_path: Path) -> None:
     (tmp_path / "SOME_PRD.md").write_text("just a PRD, no changelog section\n", encoding="utf-8")
+    (tmp_path / "SOME_SPEC.md").write_text("## Phase Plan Header\n\n**Phase 1 of 1.**\n", encoding="utf-8")
     assert find_step10_execution_artifacts(tmp_path) is None
 
 
-def test_find_step10_execution_artifacts_found_by_content_not_default_filename(tmp_path: Path) -> None:
-    """STEP_10's own default PRD filename is "ULTIMATE_PRD.md", but real usage overrides it
-    (verified: this project's own real customization uses "loopr-PRD.md") -- detection must be
-    content-based, not a filename guess. Uses a NON-default name deliberately."""
-    (tmp_path / "PHASE_1_SPEC.md").write_text("**Phase 1 of 1.**\n", encoding="utf-8")
-    (tmp_path / "totally-custom-prd-name.md").write_text(
-        "some intro\n## MODERNIZATION CHANGELOG\n- change 1\n", encoding="utf-8"
+def test_find_step10_execution_artifacts_prose_mention_of_changelog_heading_does_not_count(
+    tmp_path: Path,
+) -> None:
+    """FIX 1's exact regression: a file that only MENTIONS "## MODERNIZATION CHANGELOG" inside prose
+    (a blockquote referencing the heading, exactly as this repo's own loopr-PRD.md line 8 and
+    CUSTOMIZATION_PHASE_3_SPEC.md line 660 do) must never be mistaken for the real heading. Only a
+    line that IS the heading, stripped, counts."""
+    (tmp_path / "MENTIONS_ONLY.md").write_text(
+        "> see the `## MODERNIZATION CHANGELOG` section at the foot of this document for detail\n",
+        encoding="utf-8",
+    )
+    assert find_step10_execution_artifacts(tmp_path) is None
+
+    (tmp_path / "REAL_PRD.md").write_text(
+        "some intro\n\n## MODERNIZATION CHANGELOG\n- change 1\n", encoding="utf-8"
+    )
+    (tmp_path / "REAL_SPEC.md").write_text(
+        "## Phase Plan Header\n\nBuilt FROM the modernised REAL_PRD.md.\n\n**Phase 1 of 1.**\n",
+        encoding="utf-8",
     )
     result = find_step10_execution_artifacts(tmp_path)
     assert result is not None
-    prd_path, phase_1_spec_path = result
+    prd_path, spec_path = result
+    assert prd_path.name == "REAL_PRD.md"
+    assert spec_path.name == "REAL_SPEC.md"
+
+
+def test_find_step10_execution_artifacts_found_by_content_and_provenance_not_fixed_filename(
+    tmp_path: Path,
+) -> None:
+    """Neither deliverable uses STEP_10's default/literal filename ("ULTIMATE_PRD.md",
+    "PHASE_1_SPEC.md") -- detection must be content- and provenance-based, not a filename guess.
+    Mirrors this repo's own real dogfooding case, where PHASE_1_SPEC.md was already taken by an
+    unrelated file."""
+    (tmp_path / "totally-custom-prd-name.md").write_text(
+        "some intro\n\n## MODERNIZATION CHANGELOG\n- change 1\n", encoding="utf-8"
+    )
+    (tmp_path / "PHASE_1_SPEC.md").write_text(
+        "unrelated stale file from a different build, no Phase Plan Header here\n", encoding="utf-8"
+    )
+    (tmp_path / "totally-custom-spec-name.md").write_text(
+        "## Phase Plan Header\n\n"
+        "Built FROM the modernised `totally-custom-prd-name.md`.\n\n"
+        "**Phase 1 of 1.**\n",
+        encoding="utf-8",
+    )
+    result = find_step10_execution_artifacts(tmp_path)
+    assert result is not None
+    prd_path, spec_path = result
     assert prd_path.name == "totally-custom-prd-name.md"
-    assert phase_1_spec_path.name == "PHASE_1_SPEC.md"
+    assert spec_path.name == "totally-custom-spec-name.md"  # NOT the stale PHASE_1_SPEC.md
+
+
+def test_find_step10_execution_artifacts_raises_on_zero_valid_spec_candidates(tmp_path: Path) -> None:
+    """A modernised PRD exists, but nothing at repo_root both carries a Phase Plan Header line and
+    names it -- a genuine ambiguity (step10's Deliverable B may simply not exist yet, or was written
+    without provenance back to the PRD), not silently reported as "step10 never ran"."""
+    (tmp_path / "REAL_PRD.md").write_text("## MODERNIZATION CHANGELOG\n- change 1\n", encoding="utf-8")
+    (tmp_path / "UNRELATED.md").write_text("no Phase Plan Header, no mention of the PRD\n", encoding="utf-8")
+    with pytest.raises(Step10ArtifactAmbiguityError) as excinfo:
+        find_step10_execution_artifacts(tmp_path)
+    assert "REAL_PRD.md" in str(excinfo.value)
+
+
+def test_find_step10_execution_artifacts_raises_on_multiple_colliding_spec_candidates(
+    tmp_path: Path,
+) -> None:
+    """Two structurally-valid Phase-N-spec candidates both genuinely name the same modernised PRD --
+    a real ambiguity a human must resolve, never a recency guess or any other silent tiebreak. Both
+    colliding candidates must be named in the raised report."""
+    (tmp_path / "REAL_PRD.md").write_text("## MODERNIZATION CHANGELOG\n- change 1\n", encoding="utf-8")
+    (tmp_path / "SPEC_A.md").write_text(
+        "## Phase Plan Header\n\nBuilt FROM the modernised REAL_PRD.md.\n\n**Phase 1 of 1.**\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "SPEC_B.md").write_text(
+        "## Phase Plan Header\n\nBuilt FROM the modernised REAL_PRD.md.\n\n**Phase 1 of 1.**\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(Step10ArtifactAmbiguityError) as excinfo:
+        find_step10_execution_artifacts(tmp_path)
+    message = str(excinfo.value)
+    assert "SPEC_A.md" in message
+    assert "SPEC_B.md" in message
 
 
 def test_find_step10_execution_artifacts_against_this_repos_own_real_state() -> None:
     """Demonstrated against THIS project's own real, already-executed step10 output -- not a
     synthetic fixture standing in for one (CUSTOMIZATION_PHASE_2_SPEC.md SS5.2's discipline, applied
-    here too)."""
+    here too).
+
+    This repo's real, current state is a genuine ambiguity, not a clean pair: BOTH PHASE_1_SPEC.md
+    (loopr's own original core-module Phase 1 blueprint, "> Built 2026-07-28 from the modernised
+    `loopr-PRD.md`...") and CUSTOMIZATION_PHASE_3_SPEC.md (this dogfooding run's real Phase 3
+    deliverable, "Built FROM the modernised `loopr-PRD.md`...") independently and legitimately carry
+    a real "Phase Plan Header" AND an explicit "built from loopr-PRD.md" provenance claim -- because
+    this repo has genuinely gone through more than one loopr-PRD.md-derived phase-spec build over its
+    own layered history. No content-level signal can honestly pick one over the other without
+    guessing; FIX 2c's own rule is that this is exactly the case a human must resolve, not something
+    a detector should paper over. (SKILL_PHASE_1_SPEC.md, a third file that also has a Phase Plan
+    Header, is correctly excluded: its own provenance claim is "Built FROM the baby PRD confirmed via
+    a real loopr brownfield run", not loopr-PRD.md -- it only mentions loopr-PRD.md's filename much
+    later, in an unrelated cross-reference, which _names_prd_as_provenance's proximity requirement
+    correctly does not count.)"""
     repo_root = Path(__file__).resolve().parents[1]
-    result = find_step10_execution_artifacts(repo_root)
-    assert result is not None
-    prd_path, phase_1_spec_path = result
-    assert prd_path.name == "loopr-PRD.md"  # NOT the default "ULTIMATE_PRD.md"
-    assert phase_1_spec_path.name == "PHASE_1_SPEC.md"
+    with pytest.raises(Step10ArtifactAmbiguityError) as excinfo:
+        find_step10_execution_artifacts(repo_root)
+    message = str(excinfo.value)
+    assert "loopr-PRD.md" in message
+    assert "PHASE_1_SPEC.md" in message
+    assert "CUSTOMIZATION_PHASE_3_SPEC.md" in message
+    assert "SKILL_PHASE_1_SPEC.md" not in message  # correctly excluded, not a colliding candidate
