@@ -671,3 +671,72 @@ def test_full_step10_run_resolves_project_name_repo_name_and_prd_filename_with_n
     assert "[PRD_FILENAME]" not in unresolved
 
     assert find_unclassified_bracket_spans(body, CustomizationStep.STEP_10) == []
+
+
+# ============================================================================
+# 2026-08-04: STEP_10's research-grounding stack changed from a hard-HALT REQUIRED SKILLS list
+# (/Nia · /arxiv · /paper-search) to graceful degradation over four external capabilities (web
+# search, /arxiv, /paper-search, GitHub MCP read-only), with Nia/Context7 removed entirely. This is
+# a structural regression only -- it proves the customized, dispatched subagent body no longer
+# carries the retired /Nia dependency or its hard-HALT language, and that a genuinely
+# project-specific customization still passes both fidelity layers against the corrected template.
+# It does not call any live GitHub MCP tooling.
+# ============================================================================
+
+
+def test_full_step10_run_against_corrected_template_carries_no_nia_reference(tmp_path: Path) -> None:
+    """The concrete regression for the graceful-degradation fix: a full `loopr customize --step 10`
+    run against the real (edited) template, driven to a dispatched subagent, must not surface /Nia
+    -- or the retired "if a skill is not loaded, you have not started" hard-HALT phrasing -- anywhere
+    in the customized output, while still passing both fidelity layers on a genuinely
+    project-specific fill."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _seed_real_step10_template(repo)
+
+    # The template on disk itself must already be clean -- this is the direct, file-level check
+    # the earlier verification pass ran by hand; asserted here so it is enforced by the suite too.
+    template_text = (repo / "prompts" / "Template_prompts" / "STEP_10").read_text(encoding="utf-8")
+    assert "Nia" not in template_text
+    assert "have not started" not in template_text
+
+    state_path = tmp_path / "state.json"
+    assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
+    store = StateStore(state_path)
+    _drive_to_complete(state_path, store.dir, tmp_path)
+
+    customized = _plausible_real_step10_customization(template_text)
+    judge_response_path = tmp_path / "jr.json"
+
+    code = main(["customize", "--state", str(state_path), "--step", "10"])
+    assert code == exit_codes.JUDGE_REQUIRED
+    request = json.loads((store.dir / "pending_judge.json").read_text(encoding="utf-8"))
+    response = JudgeResponse(call_id=request["call_id"], drafted_text=customized, reason="drafted")
+    judge_response_path.write_text(response.model_dump_json(), encoding="utf-8")
+
+    code = main(
+        ["customize", "--state", str(state_path), "--step", "10", "--judge-response", str(judge_response_path)]
+    )
+    assert code == exit_codes.JUDGE_REQUIRED  # layer 1 (structural) passed
+    request2 = json.loads((store.dir / "pending_judge.json").read_text(encoding="utf-8"))
+    response2 = JudgeResponse(
+        call_id=request2["call_id"], passed=True, reason="genuinely project-specific, no retired capability names"
+    )
+    judge_response_path.write_text(response2.model_dump_json(), encoding="utf-8")
+
+    code = main(
+        ["customize", "--state", str(state_path), "--step", "10", "--judge-response", str(judge_response_path)]
+    )
+    assert code == exit_codes.OK  # layer 2 (fidelity judge) passed too
+
+    output_path = repo / ".claude" / "agents" / f"{STEP10_SUBAGENT_NAME}.md"
+    dispatched_text = output_path.read_text(encoding="utf-8")
+
+    assert "Nia" not in dispatched_text
+    assert "have not started" not in dispatched_text
+    assert "GitHub MCP" in dispatched_text  # the replacement capability is actually present
+
+    final_state = StateStore(state_path).load()
+    assert final_state.customization is not None
+    assert final_state.customization.step10_fidelity is not None
+    assert final_state.customization.step10_fidelity.overall is True

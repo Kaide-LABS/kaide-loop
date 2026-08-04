@@ -90,31 +90,42 @@ the literature arm of §2 as the [RESEARCH FOCUS].
 2. RESEARCH & GROUNDING (EXTERNAL DEPENDENCY ADD-ON)
 
 
-Before synthesizing or writing EITHER deliverable, ground yourself in current, real sources. Invoke
-the research skills below; do not rely on internal weights for anything version-, API-, or
-literature-dependent.
+Before synthesizing or writing EITHER deliverable, ground yourself in current, real sources. Every
+capability below is used IF AVAILABLE and skipped, visibly, IF NOT -- this step must be able to
+complete on native web search alone (see HALT CONDITIONS). Do not rely on internal weights for
+anything version-, API-, or literature-dependent when a capability could have verified it instead.
 
 
-REQUIRED SKILLS: /Nia · /arxiv · /paper-search
-Load them before you begin. If a skill is not loaded, you have not started.
+EXTERNAL CAPABILITIES: native web search (the floor this step runs on) · /arxiv and /paper-search
+(research literature, both kept -- they cover different ground) · GitHub MCP, read-only (dependency
+source verification, narrowly scoped -- see below).
+Attempt each before you begin.
 
 
-DOCUMENTATION & CODEBASE -- /Nia:
+DOCUMENTATION & CODEBASE -- GitHub MCP (read-only) + web search:
 
 
 
 
-Index this repository with /Nia so retrieval reflects the current state, not a stale index.
+Use GitHub MCP, if available, narrowly to verify the API surface and packaging reality of libraries
+this project actually depends on, by reading their real public source (the dependency's own
+pyproject.toml / package.json / module code) -- not to browse public repositories for patterns or
+ideas to adapt. Real packaging metadata is a strictly better source than a doc-mirror approximation
+for the failure class that matters here: a wrong version pin, a renamed API, or a dependency that no
+longer exists.
 
 
-Use /Nia to index and fetch the latest official documentation for every service, SDK, framework,
-and library this project touches (e.g. FastAPI, Pydantic v2, Google GenAI SDK, Next.js, GCP
-services, DuckDB). Ground every API signature, method, and config option in real current docs.
-Do NOT hallucinate syntax; if you can't verify it, say so.
+GitHub MCP must be configured read-only (a scoped, fine-grained read-only token) -- this step never
+writes to GitHub, and the enforcement should come from the token's own scope, not from this
+instruction alone. GitHub's unauthenticated rate limit (60 requests/hour) makes a personal access
+token a practical requirement the moment you read more than a couple of files; if the token is
+missing, invalid, or rate-limited, degrade per HALT CONDITIONS -- do not block on it.
 
 
-Use /Nia semantic search over the indexed repo/docs rather than flat file reads when you need
-cross-cutting understanding.
+Use web search to ground the latest official documentation for every service, SDK, framework, and
+library this project touches (e.g. FastAPI, Pydantic v2, Google GenAI SDK, Next.js, GCP services,
+DuckDB). Ground every API signature, method, and config option in real current docs. Do NOT
+hallucinate syntax; if you can't verify it, say so.
 
 
 
@@ -178,16 +189,18 @@ HALT CONDITIONS:
 
 
 
-If a required skill (/Nia, /arxiv, /paper-search) fails to load, or its underlying tooling is
-broken/missing (CLI absent, index stale, auth failing), HALT and report: which skill, what the
-failure was, and what you could not verify as a result.
+Do NOT hard-halt because a capability (GitHub MCP, /arxiv, /paper-search) is unavailable, broken, or
+rate-limited -- degrade instead: attempt it, and if it fails to load or its underlying tooling is
+broken (CLI absent, auth failing, token missing/invalid, index stale), skip it and log which
+capability was skipped and why. Native web search is the one floor this step may not fall below --
+if web search itself is unavailable, that is a genuine HALT.
 
 
-Do NOT silently substitute web search for a broken skill. Do NOT silently proceed on memory.
-
-
-A skill whose instructions point at tooling that does not exist is a broken skill, not a usable
-one. Report it; do not work around it quietly.
+Do NOT silently proceed as though a skipped capability had actually run, and do NOT silently
+substitute one capability for another without saying so. State explicitly, in your HANDOFF report
+(§6), which capabilities you actually used and which you skipped and why -- a pass that ran on web
+search alone must never read identically to one that verified dependency versions against real
+GitHub source.
 
 
 
@@ -327,6 +340,11 @@ Confirm BOTH deliverables saved:
 
 
 PHASE_1_SPEC.md -- Phase 1 blueprint.
+State which external capabilities (§2) you actually used and which you skipped, and why -- in every
+report, not only when something HALTs. A pass that ran on web search alone must never read
+identically to one that verified dependency versions against real GitHub source.
+
+
 Report a one-paragraph summary of the changelog and list any escalations (open architecture questions
 or HALT conditions hit). If an escalation is open, STOP and wait -- do not start the loop. Otherwise
 acknowledge ready-to-loop. Output nothing else.

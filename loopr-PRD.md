@@ -355,9 +355,10 @@ Acceptance criterion 3 and this continuity model are the same mechanism from two
 
 **Optional enhancements (used if present, never required):**
 - **paper-search-mcp** (MIT, free-first, multi-source incl. arXiv/PubMed/bioRxiv/Semantic Scholar) for academic and technical grounding. Genuinely vendorable; hits public APIs.
-- **Context7** (MIT server, free tier, no API key needed for basic use) for current, version-specific library docs so the build does not hallucinate API syntax. **Note:** Context7's docs engine is a proprietary hosted service; loopr depends on it, it does not embed it. **Therefore loopr falls back to native web search for doc grounding when Context7 is unavailable,** preserving the "don't hallucinate API syntax" property.
+- **arXiv MCP** (MIT, free) for preprints, citation-graph, and semantic search over arXiv specifically. Kept alongside paper-search-mcp rather than treated as redundant with it: arXiv MCP's citation-graph and semantic-search surface is not duplicated by paper-search-mcp's broader cross-venue coverage — the two cover different ground.
+- **GitHub MCP, read-only** (free, no paid tier) for verifying the API surface and packaging reality of libraries the project actually depends on, by reading their real public source (the dependency's own `pyproject.toml` / `package.json` / module code) — not for browsing public repositories for patterns to adapt. Configured with a scoped, fine-grained read-only token; loopr never writes to GitHub through it. Real packaging metadata beats a doc-mirror approximation for the failure class that matters here: a wrong version pin, a renamed API, or a dependency that no longer exists. Replaces Context7 for this purpose (see below).
 
-**Hard rule: no paid dependency, ever.** A paid dependency in a free skill kills adoption before anyone sees value. (This is why the author's prior Nia dependency is replaced.) A separate arXiv MCP is intentionally omitted as redundant with paper-search.
+**Hard rule: no paid dependency, ever.** A paid dependency in a free skill kills adoption before anyone sees value. (This is why the author's prior Nia dependency is replaced.) Context7 is rejected for the same reason a step further: its MIT-licensed MCP interface fronts a proprietary hosted docs engine, an external dependency loopr does not control the availability or pricing of. GitHub MCP reading a dependency's actual source is strictly better than Context7's doc-mirror approximation for the failure class that matters (a wrong pin the real package metadata would reveal), and it is free/OSS-adjacent by construction.
 
 **Same rule re-applied to brownfield touched-surface discovery (2026-07-27).** Semantic/vector search
 over the target repo was considered for finding relevant files by meaning rather than exact keyword
@@ -486,6 +487,10 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
 
 ## 12. Explicitly out of v1 (deferred)
 
+- **Agent archetype orchestration (loopr V2)** -- architect/executor/reviewer archetypes, primary vs.
+  secondary orchestration modes, reviewer context isolation, two-layer scratch-file state, executor
+  retirement triggers. Filed 2026-08-03 as a forward spec: `docs/loopr-v2-agent-archetypes.md`.
+  V1 ships first, unchanged; this is the next major arc after V1 is complete.
 - The web-to-Code auto-relay (author's personal workflow; a stranger does everything in Claude Code).
 - Docker (native subagents replace it; the fresh-context-per-phase property loopr wanted is native to subagents).
 - Codex / Cursor ports.

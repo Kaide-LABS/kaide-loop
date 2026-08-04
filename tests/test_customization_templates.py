@@ -80,11 +80,10 @@ def test_step10_skeleton_is_exactly_nine_sections_with_title_declared_excluded()
     assert len(skeleton.sections) == 9
 
     # Independent cross-check (FIX 3): gap analysis, built without sharing _is_all_caps_section's
-    # regex, must find nothing suspicious left over except the three ALREADY-REVIEWED, genuinely
+    # regex, must find nothing suspicious left over except the two ALREADY-REVIEWED, genuinely
     # benign colon-terminated sub-labels (not real sections in this convention) -- named explicitly
     # here so a NEW, unreviewed candidate appearing later fails this assertion loudly.
     reviewed_benign_sub_labels = {
-        "DOCUMENTATION & CODEBASE -- /Nia:",
         "WEB SEARCH:",
         "HALT CONDITIONS:",
     }
