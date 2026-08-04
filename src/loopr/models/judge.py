@@ -152,14 +152,37 @@ ALLOWED_INPUTS_V4: Mapping[JudgeCallType, frozenset[str]] = {
     ),
 }
 
+# v5 (2026-08-04): a real defect found live while dogfooding `loopr customize --step 10` against
+# this repo's own run -- STEP10_CUSTOMIZATION/STEP11_CUSTOMIZATION/STEP12_CUSTOMIZATION's rubrics
+# instruct the judge to resolve [PROJECT_NAME]/[PROJECT_REPO_NAME]/[PRD_FILENAME] (all three
+# genuinely on their step's PLACEHOLDER_ALLOWLIST in templates.py), but none of the three request
+# builders ever gave the judge `repo_root` -- there was no honest way to resolve them without
+# inventing a value from outside the given context, which the rubric's own "never invent detail"
+# instruction forbids. The fidelity check's structural layer then correctly, permanently rejects the
+# unresolved brackets: a state stuck with no path to pass. Adds `repo_root` to all three
+# CUSTOMIZATION call types' scope -- NOT the three FIDELITY_JUDGE call types, which only judge
+# genuineness of what was already drafted and never needed to resolve anything themselves. Widens an
+# EXISTING call type's scope (STEP10_CUSTOMIZATION, unchanged since v3), so per the version-gating
+# contract this is a new version, not an edit to v3/v4 in place -- old records stay valid.
+ALLOWED_INPUTS_V5: Mapping[JudgeCallType, frozenset[str]] = {
+    **ALLOWED_INPUTS_V4,
+    JudgeCallType.STEP10_CUSTOMIZATION: ALLOWED_INPUTS_V4[JudgeCallType.STEP10_CUSTOMIZATION]
+    | {"repo_root"},
+    JudgeCallType.STEP11_CUSTOMIZATION: ALLOWED_INPUTS_V4[JudgeCallType.STEP11_CUSTOMIZATION]
+    | {"repo_root"},
+    JudgeCallType.STEP12_CUSTOMIZATION: ALLOWED_INPUTS_V4[JudgeCallType.STEP12_CUSTOMIZATION]
+    | {"repo_root"},
+}
+
 ALLOWED_INPUTS_BY_VERSION: Mapping[int, Mapping[JudgeCallType, frozenset[str]]] = {
     1: ALLOWED_INPUTS_V1,
     2: ALLOWED_INPUTS_V2,
     3: ALLOWED_INPUTS_V3,
     4: ALLOWED_INPUTS_V4,
+    5: ALLOWED_INPUTS_V5,
 }
 
-CURRENT_ENVELOPE_VERSION = 4
+CURRENT_ENVELOPE_VERSION = 5
 
 # The live scope, for callers building NEW requests (checks/conditions.py, tests). Always the
 # highest entry in ALLOWED_INPUTS_BY_VERSION -- kept as a top-level name for backward compatibility.

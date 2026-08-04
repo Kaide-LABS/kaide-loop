@@ -14,13 +14,27 @@ import pytest
 from loopr import exit_codes
 from loopr.cli import main
 from loopr.customization.customize import (
+    STEP10_ALLOWLIST_INPUT_DEPENDENCIES,
     STEP10_SUBAGENT_DESCRIPTION,
     STEP10_SUBAGENT_MODEL,
     STEP10_SUBAGENT_NAME,
+    STEP11_ALLOWLIST_INPUT_DEPENDENCIES,
+    STEP12_ALLOWLIST_INPUT_DEPENDENCIES,
     apply_customization_response,
+    build_customization_request,
+    build_step11_customization_request,
+    build_step12_customization_request,
 )
-from loopr.customization.templates import find_fill_in_blocks
-from loopr.models.common import CustomizationStep, Verdict
+from loopr.customization.templates import (
+    STEP10_PLACEHOLDER_ALLOWLIST,
+    STEP11_PLACEHOLDER_ALLOWLIST,
+    STEP12_PLACEHOLDER_ALLOWLIST,
+    find_fill_in_blocks,
+    find_unclassified_bracket_spans,
+    unresolved_placeholders,
+)
+from loopr.models.common import CustomizationStep, Mode, Verdict
+from loopr.models.interrogation import InterrogationState
 from loopr.models.judge import JudgeResponse
 from loopr.state.store import StateStore
 
@@ -297,10 +311,13 @@ def test_judge_request_never_carries_frontmatter_content(
     request_raw = (state_path.parent / "pending_judge.json").read_text(encoding="utf-8")
     request = json.loads(request_raw)
 
-    # The declared, version-gated input scope is unchanged by this amendment -- exactly what
-    # CUSTOMIZATION_PHASE_1_SPEC.md SS4.1 specified before subagent dispatch existed.
+    # The declared, version-gated input scope is unchanged by the subagent-dispatch amendment --
+    # exactly what CUSTOMIZATION_PHASE_1_SPEC.md SS4.1 specified, plus `repo_root` (added 2026-08-04:
+    # the judge cannot honestly resolve [PROJECT_NAME]/[PROJECT_REPO_NAME]/[PRD_FILENAME], all three
+    # genuinely on STEP10_PLACEHOLDER_ALLOWLIST, without it).
     assert set(request["inputs"].keys()) == {
         "template_text",
+        "repo_root",
         "problem_statement",
         "acceptance_criteria",
         "scope_edges",
@@ -498,3 +515,159 @@ def test_full_cli_run_against_real_step10_template_produces_passing_subagent(tmp
     assert final_state.customization.step10_fidelity.structural_pass is True
     assert final_state.customization.step10_fidelity.judge_pass is True
     assert final_state.customization.step10_output_path == str(subagent_path)
+
+
+# ============================================================================
+# 2026-08-04 review patch: the customization judge's inputs never included repo_root, so
+# [PROJECT_NAME]/[PROJECT_REPO_NAME]/[PRD_FILENAME] (genuinely on STEP10_PLACEHOLDER_ALLOWLIST) had
+# no honest resolution path -- a real defect found live while dogfooding `loopr customize --step 10`
+# against this repo's own Phase 3 run. Regression coverage below.
+# ============================================================================
+
+
+def test_step10_customization_request_carries_correct_repo_root_value(tmp_path: Path) -> None:
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path / "my-project"))
+    request = build_customization_request(state, template_text="template body")
+    assert request.inputs["repo_root"] == str(tmp_path / "my-project")
+
+
+def test_step11_customization_request_carries_correct_repo_root_value(tmp_path: Path) -> None:
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path / "my-project"))
+    request = build_step11_customization_request(
+        state, template_text="template body", phase_1_spec_text="**Phase 1 of 3.**"
+    )
+    assert request.inputs["repo_root"] == str(tmp_path / "my-project")
+
+
+def test_step12_customization_request_carries_correct_repo_root_value(tmp_path: Path) -> None:
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path / "my-project"))
+    request = build_step12_customization_request(
+        state, template_text="template body", phase_1_spec_text="**Phase 1 of 3.**"
+    )
+    assert request.inputs["repo_root"] == str(tmp_path / "my-project")
+
+
+def test_fidelity_judge_requests_do_not_carry_repo_root() -> None:
+    """Scoped narrowly, per the fix's own instruction: repo_root belongs to the three CUSTOMIZATION
+    call types only -- fidelity judging only checks the customization judge's already-drafted
+    output, it never resolves anything itself, so adding repo_root there would be scope creep, not
+    part of this fix."""
+    from loopr.customization.customize import (
+        build_fidelity_judge_request,
+        build_step11_fidelity_judge_request,
+        build_step12_fidelity_judge_request,
+    )
+
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root="/some/repo")
+    for request in (
+        build_fidelity_judge_request(state, template_text="t", customized_text="c"),
+        build_step11_fidelity_judge_request(state, template_text="t", customized_text="c"),
+        build_step12_fidelity_judge_request(state, template_text="t", customized_text="c"),
+    ):
+        assert "repo_root" not in request.inputs
+
+
+@pytest.mark.parametrize(
+    ("step_name", "allowlist", "dependencies"),
+    [
+        ("step10", STEP10_PLACEHOLDER_ALLOWLIST, STEP10_ALLOWLIST_INPUT_DEPENDENCIES),
+        ("step11", STEP11_PLACEHOLDER_ALLOWLIST, STEP11_ALLOWLIST_INPUT_DEPENDENCIES),
+        ("step12", STEP12_PLACEHOLDER_ALLOWLIST, STEP12_ALLOWLIST_INPUT_DEPENDENCIES),
+    ],
+)
+def test_allowlist_input_dependencies_are_complete(
+    step_name: str, allowlist: frozenset[str], dependencies: dict[str, frozenset[str]]
+) -> None:
+    """The regression flagged twice and never yet written: every token on a step's
+    PLACEHOLDER_ALLOWLIST (genuinely customizer-resolvable) must have an explicit, recorded answer
+    -- in customize.py's STEP<N>_ALLOWLIST_INPUT_DEPENDENCIES -- to what input facts its resolution
+    depends on, even if that answer is "none, the baseline fields suffice" (an empty frozenset, never
+    a missing entry). A token present in the allowlist but absent from the dependency map is exactly
+    how [PROJECT_NAME]/[PROJECT_REPO_NAME]/[PRD_FILENAME] silently shipped without repo_root."""
+    assert set(dependencies.keys()) == allowlist, (
+        f"{step_name}: PLACEHOLDER_ALLOWLIST and ALLOWLIST_INPUT_DEPENDENCIES have drifted apart -- "
+        f"in allowlist but undeclared: {allowlist - set(dependencies.keys())}; "
+        f"declared but not on the allowlist: {set(dependencies.keys()) - allowlist}"
+    )
+
+
+def test_allowlist_input_dependencies_are_true_for_step10() -> None:
+    """Not just complete -- TRUE: every key a token's dependency entry declares is actually present
+    in what the real request builder sends. Checked by calling the builder for real, not inspecting
+    the dict in isolation."""
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root="/some/repo")
+    request = build_customization_request(state, template_text="template body")
+    actual_keys = set(request.inputs.keys())
+    for token, needed_keys in STEP10_ALLOWLIST_INPUT_DEPENDENCIES.items():
+        missing = needed_keys - actual_keys
+        assert not missing, f"{token} declares dependency on {missing}, absent from the real request"
+
+
+def test_allowlist_input_dependencies_are_true_for_step11_and_step12() -> None:
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root="/some/repo")
+    request11 = build_step11_customization_request(
+        state, template_text="template body", phase_1_spec_text="**Phase 1 of 3.**"
+    )
+    request12 = build_step12_customization_request(
+        state, template_text="template body", phase_1_spec_text="**Phase 1 of 3.**"
+    )
+    for request, dependencies in (
+        (request11, STEP11_ALLOWLIST_INPUT_DEPENDENCIES),
+        (request12, STEP12_ALLOWLIST_INPUT_DEPENDENCIES),
+    ):
+        actual_keys = set(request.inputs.keys())
+        for token, needed_keys in dependencies.items():
+            missing = needed_keys - actual_keys
+            assert not missing, f"{token} declares dependency on {missing}, absent from the request"
+
+
+def test_full_step10_run_resolves_project_name_repo_name_and_prd_filename_with_no_unclassified_spans(
+    tmp_path: Path,
+) -> None:
+    """The concrete, end-to-end regression, against the REAL template (the fabricated synthetic
+    fixture used elsewhere in this file never even contains [PRD_FILENAME]): with repo_root now
+    available, a full customize run against a fixture repo produces output containing NO unresolved
+    [PROJECT_NAME]/[PROJECT_REPO_NAME]/[PRD_FILENAME] -- checked both the substantive way
+    (unresolved_placeholders, which is specifically what "still present, never filled" means) and via
+    find_unclassified_bracket_spans returning [] outright, not just "fewer" than before."""
+    repo = tmp_path / "my-real-project"
+    repo.mkdir()
+    _seed_real_step10_template(repo)
+    state_path = tmp_path / "state.json"
+    assert main(["init", "--repo", str(repo), "--mode", "greenfield", "--state", str(state_path)]) == 0
+    store = StateStore(state_path)
+    _drive_to_complete(state_path, store.dir, tmp_path)
+
+    judge_response_path = tmp_path / "jr.json"
+    code = main(["customize", "--state", str(state_path), "--step", "10"])
+    assert code == exit_codes.JUDGE_REQUIRED
+    request = json.loads((state_path.parent / "pending_judge.json").read_text(encoding="utf-8"))
+    assert request["inputs"]["repo_root"] == str(repo)
+
+    # A genuine resolution of all three tokens, including [PRD_FILENAME] -- grounded in the
+    # repo_root the judge was actually given, not a synthetic value disconnected from the fix.
+    template_text = (repo / "prompts" / "Template_prompts" / "STEP_10").read_text(encoding="utf-8")
+    customized = _plausible_real_step10_customization(template_text)
+    response = JudgeResponse(call_id=request["call_id"], drafted_text=customized, reason="drafted")
+    judge_response_path.write_text(response.model_dump_json(), encoding="utf-8")
+    code = main(
+        ["customize", "--state", str(state_path), "--step", "10", "--judge-response", str(judge_response_path)]
+    )
+    assert code == exit_codes.JUDGE_REQUIRED
+    request2 = json.loads((state_path.parent / "pending_judge.json").read_text(encoding="utf-8"))
+    response2 = JudgeResponse(call_id=request2["call_id"], passed=True, reason="genuinely specific")
+    judge_response_path.write_text(response2.model_dump_json(), encoding="utf-8")
+    code = main(
+        ["customize", "--state", str(state_path), "--step", "10", "--judge-response", str(judge_response_path)]
+    )
+    assert code == exit_codes.OK
+
+    output_path = repo / ".claude" / "agents" / f"{STEP10_SUBAGENT_NAME}.md"
+    _frontmatter, body = _parse_subagent(output_path.read_text(encoding="utf-8"))
+
+    unresolved = unresolved_placeholders(body, CustomizationStep.STEP_10)
+    assert "[PROJECT_NAME]" not in unresolved
+    assert "[PROJECT_REPO_NAME]" not in unresolved
+    assert "[PRD_FILENAME]" not in unresolved
+
+    assert find_unclassified_bracket_spans(body, CustomizationStep.STEP_10) == []

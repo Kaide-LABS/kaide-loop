@@ -370,6 +370,7 @@ def test_step11_judge_request_never_carries_frontmatter_content(
     assert set(request["inputs"].keys()) == {
         "template_text",
         "phase_1_spec_text",
+        "repo_root",
         "problem_statement",
         "acceptance_criteria",
         "scope_edges",

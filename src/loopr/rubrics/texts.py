@@ -119,15 +119,22 @@ RUBRICS: Mapping[JudgeCallType, RubricSpec] = {
         ),
     ),
     JudgeCallType.STEP10_CUSTOMIZATION: RubricSpec(
-        rubric_id="step10_customization_v1",
+        rubric_id="step10_customization_v2",
         text=(
             "Customize this template for THIS project, using only the confirmed problem statement, "
-            "acceptance criteria, scope edges, boundary, soft context notes, and conformance summary "
-            "given -- never invent detail, never import an example from another project. This is a "
-            "synthesis task, not a pass/fail judgment: fill and adapt every placeholder you can "
-            "resolve from the given fields; where a placeholder's value is not yet knowable (e.g. it "
-            "depends on this template's own future output), leave it exactly as it appears in the "
-            "template -- do not guess, do not delete it, do not fabricate a plausible-looking value. "
+            "acceptance criteria, scope edges, boundary, soft context notes, conformance summary, and "
+            "repo_root (the project's real filesystem path) given -- never invent detail, never "
+            "import an example from another project. This is a synthesis task, not a pass/fail "
+            "judgment: fill and adapt every placeholder you can resolve from the given fields; where "
+            "a placeholder's value is not yet knowable (e.g. it depends on this template's own future "
+            "output), leave it exactly as it appears in the template -- do not guess, do not delete "
+            "it, do not fabricate a plausible-looking value. Resolve [PROJECT_NAME] and "
+            "[PROJECT_REPO_NAME] from repo_root (the repo's real directory name and a readable "
+            "project name derived from it plus the confirmed problem statement) -- these ARE "
+            "genuinely resolvable now, do not leave them as placeholders for lack of a dedicated "
+            "project-name field. Resolve [PRD_FILENAME] the same way, using your own judgment from "
+            "repo_root and the confirmed fields; if genuinely unsure, the template's own stated "
+            "default ('ULTIMATE_PRD.md') is an honest fallback, not a guess. "
             "PRESERVE EVERY SECTION, IN THE SAME ORDER, WITH THE SAME HEADERS -- fill and adapt, "
             "never restructure, condense, reorder, or rewrite the template's own shape. Tags and "
             "reject-pattern shorthand that merely LOOK like placeholders (e.g. a bracketed tag the "
@@ -149,18 +156,23 @@ RUBRICS: Mapping[JudgeCallType, RubricSpec] = {
         ),
     ),
     JudgeCallType.STEP11_CUSTOMIZATION: RubricSpec(
-        rubric_id="step11_customization_v1",
+        rubric_id="step11_customization_v2",
         text=(
             "Customize this template for THIS project, using only the confirmed problem statement, "
             "acceptance criteria, scope edges, boundary, soft context notes, conformance summary, "
-            "and the project's own PHASE_1_SPEC.md (produced by step10 having actually run) given -- "
-            "never invent detail, never import an example from another project. This is a synthesis "
-            "task, not a pass/fail judgment: fill and adapt every placeholder you can resolve from "
-            "the given fields; where a placeholder's value is not yet knowable even now, leave it "
-            "exactly as it appears in the template -- do not guess, do not delete it, do not "
-            "fabricate a plausible-looking value. Resolve [PHASE_COUNT] by reading it directly from "
-            "PHASE_1_SPEC.md's own SS0 phase-plan header ('Phase 1 of N') -- it is now genuinely "
-            "knowable, unlike in step10's own template, precisely because step10 has already run. "
+            "repo_root (the project's real filesystem path), and the project's own PHASE_1_SPEC.md "
+            "(produced by step10 having actually run) given -- never invent detail, never import an "
+            "example from another project. This is a synthesis task, not a pass/fail judgment: fill "
+            "and adapt every placeholder you can resolve from the given fields; where a placeholder's "
+            "value is not yet knowable even now, leave it exactly as it appears in the template -- do "
+            "not guess, do not delete it, do not fabricate a plausible-looking value. Resolve "
+            "[PROJECT_NAME], [PROJECT_REPO_NAME], [PROJECT], and [PROJECT_TAG] from repo_root (the "
+            "repo's real directory name, and a readable project name/short tag derived from it plus "
+            "the confirmed problem statement) -- these ARE genuinely resolvable now, do not leave "
+            "them as placeholders for lack of a dedicated project-name field. Resolve [PHASE_COUNT] "
+            "by reading it directly from PHASE_1_SPEC.md's own SS0 phase-plan header ('Phase 1 of "
+            "N') -- it is now genuinely knowable, unlike in step10's own template, precisely because "
+            "step10 has already run. "
             "PRESERVE EVERY SECTION, IN THE SAME ORDER, WITH THE SAME HEADERS, EXCEPT: the "
             "'TEMPLATE CUSTOMIZATION CHECKLIST' section must be removed entirely from your output -- "
             "its own text says to remove it before use, it is scaffolding for a human customizing by "
@@ -195,18 +207,23 @@ RUBRICS: Mapping[JudgeCallType, RubricSpec] = {
         ),
     ),
     JudgeCallType.STEP12_CUSTOMIZATION: RubricSpec(
-        rubric_id="step12_customization_v1",
+        rubric_id="step12_customization_v2",
         text=(
             "Customize this template for THIS project, using only the confirmed problem statement, "
             "acceptance criteria, scope edges, boundary, soft context notes, conformance summary, "
-            "and the project's own PHASE_1_SPEC.md (produced by step10 having actually run) given -- "
-            "never invent detail, never import an example from another project. This is a synthesis "
-            "task, not a pass/fail judgment: fill and adapt every placeholder you can resolve from "
-            "the given fields; where a placeholder's value is not yet knowable even now, leave it "
-            "exactly as it appears in the template -- do not guess, do not delete it, do not "
-            "fabricate a plausible-looking value. Resolve [PHASE_COUNT] by reading it directly from "
-            "PHASE_1_SPEC.md's own SS0 phase-plan header ('Phase 1 of N') -- it is now genuinely "
-            "knowable, unlike in step10's own template, precisely because step10 has already run. "
+            "repo_root (the project's real filesystem path), and the project's own PHASE_1_SPEC.md "
+            "(produced by step10 having actually run) given -- never invent detail, never import an "
+            "example from another project. This is a synthesis task, not a pass/fail judgment: fill "
+            "and adapt every placeholder you can resolve from the given fields; where a placeholder's "
+            "value is not yet knowable even now, leave it exactly as it appears in the template -- do "
+            "not guess, do not delete it, do not fabricate a plausible-looking value. Resolve "
+            "[PROJECT_NAME], [PROJECT_REPO_NAME], [PROJECT], and [PROJECT_TAG] from repo_root (the "
+            "repo's real directory name, and a readable project name/short tag derived from it plus "
+            "the confirmed problem statement) -- these ARE genuinely resolvable now, do not leave "
+            "them as placeholders for lack of a dedicated project-name field. Resolve [PHASE_COUNT] "
+            "by reading it directly from PHASE_1_SPEC.md's own SS0 phase-plan header ('Phase 1 of "
+            "N') -- it is now genuinely knowable, unlike in step10's own template, precisely because "
+            "step10 has already run. "
             "[EXECUTOR_AGENT_FICTION] names the entity that supposedly wrote the code under review: "
             "draft a value grounded only in the confirmed spec content available to you -- if that "
             "content doesn't establish genuine build/review separateness, a generic fictional name "

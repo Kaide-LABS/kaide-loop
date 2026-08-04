@@ -39,9 +39,49 @@ def _conformance_summary(state: InterrogationState) -> JsonValue:
     ]
 
 
+# Completeness discipline for the exact defect class fixed in the 2026-08-04 review patch: an
+# allowlisted, genuinely customizer-resolvable token (templates.py's STEP<N>_PLACEHOLDER_ALLOWLIST)
+# silently missing the input fact its resolution actually depends on -- undetected until a real
+# customize run gets permanently stuck (the structural fidelity check correctly, forever rejects the
+# unresolved bracket; there is no retry path once the judge has nothing honest to resolve it from).
+# Maps every allowlisted token, per step, to the EXTRA input keys it needs beyond the baseline
+# synthesis fields every customization call already carries (template_text, problem_statement,
+# acceptance_criteria, scope_edges, boundary, context_notes, conformance_summary). An empty
+# frozenset is a real, considered decision ("the baseline fields alone are enough"), not an
+# oversight left unrecorded -- always say why in a comment when a token maps to one. Tested
+# (tests/test_customization_cli.py) against both (a) completeness -- every allowlist entry has a
+# mapping here -- and (b) truth -- the mapped keys are actually present in what the corresponding
+# request builder sends.
+STEP10_ALLOWLIST_INPUT_DEPENDENCIES: dict[str, frozenset[str]] = {
+    "[PROJECT_NAME]": frozenset({"repo_root"}),
+    "[PROJECT_REPO_NAME]": frozenset({"repo_root"}),
+    "[PRD_FILENAME]": frozenset({"repo_root"}),  # + the template's own stated default as a fallback
+}
+
+STEP11_ALLOWLIST_INPUT_DEPENDENCIES: dict[str, frozenset[str]] = {
+    "[PROJECT_NAME]": frozenset({"repo_root"}),
+    "[PROJECT_REPO_NAME]": frozenset({"repo_root"}),
+    "[PROJECT]": frozenset({"repo_root"}),  # prefixes "[PROJECT]_Master_PRD.md" in the template
+    "[PROJECT_TAG]": frozenset({"repo_root"}),  # short git-commit-tag form, same source signal
+    "[PHASE_COUNT]": frozenset({"phase_1_spec_text"}),
+}
+
+STEP12_ALLOWLIST_INPUT_DEPENDENCIES: dict[str, frozenset[str]] = {
+    "[PROJECT_NAME]": frozenset({"repo_root"}),
+    "[PROJECT_REPO_NAME]": frozenset({"repo_root"}),
+    "[PROJECT]": frozenset({"repo_root"}),
+    "[PROJECT_TAG]": frozenset({"repo_root"}),
+    "[PHASE_COUNT]": frozenset({"phase_1_spec_text"}),
+    # Drafted from confirmed spec content alone (CUSTOMIZATION_PHASE_2_SPEC.md SS7.1) -- deliberately
+    # NOT derived from repo_root or anything else that could smuggle session/topology information in.
+    "[EXECUTOR_AGENT_FICTION]": frozenset(),
+}
+
+
 def build_customization_request(state: InterrogationState, template_text: str) -> JudgeRequest:
     inputs: dict[str, JsonValue] = {
         "template_text": template_text,
+        "repo_root": state.repo_root,
         "problem_statement": state.problem_statement,
         "acceptance_criteria": [c.text for c in state.acceptance_criteria],
         "scope_edges": [e.item for e in state.scope_edges],
@@ -105,6 +145,7 @@ def build_step11_customization_request(
     inputs: dict[str, JsonValue] = {
         "template_text": template_text,
         "phase_1_spec_text": phase_1_spec_text,
+        "repo_root": state.repo_root,
         "problem_statement": state.problem_statement,
         "acceptance_criteria": [c.text for c in state.acceptance_criteria],
         "scope_edges": [e.item for e in state.scope_edges],
@@ -166,6 +207,7 @@ def build_step12_customization_request(
     inputs: dict[str, JsonValue] = {
         "template_text": template_text,
         "phase_1_spec_text": phase_1_spec_text,
+        "repo_root": state.repo_root,
         "problem_statement": state.problem_statement,
         "acceptance_criteria": [c.text for c in state.acceptance_criteria],
         "scope_edges": [e.item for e in state.scope_edges],
