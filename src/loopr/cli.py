@@ -45,12 +45,22 @@ from loopr.customization.templates import (
     find_gap_candidates,
     find_step10_execution_artifacts,
 )
+from loopr.dispatch.controller import (
+    apply_completion_transition,
+    apply_dispatch_transition,
+    apply_remodernize_reset,
+    check_coherence,
+    decide,
+)
+from loopr.dispatch.log import append_decision, audit_step10_calls, read_log
+from loopr.dispatch.render import render_halt, render_human, render_json
 from loopr.errors import LooprError
 from loopr.gates.gates import GateResponse
 from loopr.interrogation.loop import InboundKind, InboundPayload, step
 from loopr.judge.envelope import read_request, read_response
-from loopr.models.common import ConditionId, CustomizationStep, GateId, Mode
+from loopr.models.common import ConditionId, CustomizationStep, DispatchStateId, GateId, Mode, Step12Verdict
 from loopr.models.customization import CustomizationState
+from loopr.models.dispatch import DispatchState
 from loopr.models.interrogation import InterrogationState
 from loopr.models.judge import JudgeRequest, JudgeResponse
 from loopr.state.store import StateStore
@@ -746,6 +756,169 @@ def _cmd_customize_step12(args: argparse.Namespace) -> int:
     return exit_codes.OK
 
 
+def _format_dispatch_state_one_line(dispatch_state: DispatchState) -> str:
+    """The one-line state summary `dispatch-complete` prints on success (CUSTOMIZATION_PHASE_3_
+    SPEC.md SS4.2). Not `render_human`/`render_json` -- there is no `DispatchDecision` at this point,
+    only the state a subsequent `loopr dispatch` will read."""
+    active_step = dispatch_state.active_step.value if dispatch_state.active_step is not None else "none"
+    verdict = (
+        dispatch_state.last_step12_verdict.value
+        if dispatch_state.last_step12_verdict is not None
+        else "none"
+    )
+    return (
+        f"active_step={active_step} build_round={dispatch_state.build_round} "
+        f"last_step12_verdict={verdict}"
+    )
+
+
+def cmd_dispatch(args: argparse.Namespace) -> int:
+    """`loopr dispatch`. Implements CUSTOMIZATION_PHASE_3_SPEC.md SS4.1: names which of the three
+    already-generated subagents runs next. `dispatch/controller.py`'s `check_coherence()` runs first,
+    always -- an incoherent state HALTs and dispatches nothing, never step10 "to be safe"."""
+    store = StateStore(Path(args.state))
+    state = store.load()
+    repo_root = Path(state.repo_root)
+    dispatch_state = state.dispatch
+
+    if args.remodernize:
+        if dispatch_state.active_step is not None:
+            print(
+                "refusing --remodernize: active_step is already "
+                f"{dispatch_state.active_step.value!r} -- cannot re-modernize on top of an "
+                "in-flight step.",
+                file=sys.stderr,
+            )
+            return exit_codes.USAGE
+        dispatch_state = apply_remodernize_reset(dispatch_state)
+
+    try:
+        artifacts = find_step10_execution_artifacts(repo_root)
+    except Step10ArtifactAmbiguityError as exc:
+        print(f"HALT: {exc}", file=sys.stderr)
+        return exit_codes.HALT
+    artifacts_present = artifacts is not None
+    build_complete_present = (repo_root / "BUILD_COMPLETE.md").exists()
+
+    coherence_failure = check_coherence(dispatch_state, artifacts_present)
+    if coherence_failure is not None:
+        print(render_halt(coherence_failure, dispatch_state), file=sys.stderr)
+        return exit_codes.HALT
+
+    decision = decide(dispatch_state, artifacts_present, build_complete_present)
+    print(render_json(decision) if args.json else render_human(decision))
+
+    terminal = decision.state_id == DispatchStateId.S0_TERMINAL
+    if args.dry_run:
+        return exit_codes.COMPLETE if terminal else exit_codes.OK
+
+    log_path = store.dir / "dispatch-log.jsonl"
+    append_decision(log_path, decision)
+
+    if terminal:
+        return exit_codes.COMPLETE
+
+    assert decision.target is not None  # unconstructable otherwise, models/dispatch.py SS3.3
+    state.dispatch = apply_dispatch_transition(dispatch_state, decision.target)
+    store.save(state)
+    return exit_codes.OK
+
+
+def cmd_dispatch_complete(args: argparse.Namespace) -> int:
+    """`loopr dispatch-complete`. Implements CUSTOMIZATION_PHASE_3_SPEC.md SS4.2: records that the
+    currently-active step finished and applies the SS6.3 transition. `--verdict` has no default -- a
+    defaulted verdict would be a silently-fabricated fact about a review that happened outside this
+    process."""
+    store = StateStore(Path(args.state))
+    state = store.load()
+    dispatch_state = state.dispatch
+
+    if dispatch_state.active_step is None:
+        print("refusing dispatch-complete: nothing is in flight (active_step is None).", file=sys.stderr)
+        return exit_codes.USAGE
+
+    completed_step = dispatch_state.active_step
+    step12_completing = completed_step == CustomizationStep.STEP_12
+
+    if not step12_completing and args.verdict is not None:
+        print(
+            f"refusing dispatch-complete: --verdict is meaningful only for step12, not "
+            f"{completed_step.value!r}.",
+            file=sys.stderr,
+        )
+        return exit_codes.USAGE
+    if step12_completing and args.verdict is None:
+        print("refusing dispatch-complete: step12 completion requires --verdict.", file=sys.stderr)
+        return exit_codes.USAGE
+
+    verdict = Step12Verdict(args.verdict) if args.verdict is not None else None
+    state.dispatch = apply_completion_transition(dispatch_state, completed_step, verdict)
+    store.save(state)
+    print(_format_dispatch_state_one_line(state.dispatch))
+    return exit_codes.OK
+
+
+def cmd_dispatch_verify(args: argparse.Namespace) -> int:
+    """`loopr dispatch-verify`. Implements CUSTOMIZATION_PHASE_3_SPEC.md SS4.4: the third-party
+    fixture runner. Loads every `*.json` fixture, feeds its state + disk facts straight to `decide()`
+    (fixtures encode already-coherent states, one per enumerated `DispatchStateId`), and diffs the
+    result against the fixture's `expected` block."""
+    fixtures_dir = Path(args.fixtures)
+    total = 0
+    mismatches = 0
+    for fixture_path in sorted(fixtures_dir.glob("*.json")):
+        total += 1
+        payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+        dispatch_state = DispatchState.model_validate(payload["state"])
+        artifacts_present = bool(payload["artifacts_present"])
+        build_complete_present = bool(payload["build_complete_present"])
+        decision = decide(dispatch_state, artifacts_present, build_complete_present)
+        expected = payload["expected"]
+        actual = {
+            "state_id": decision.state_id.value,
+            "target": decision.target.value if decision.target is not None else None,
+            "step10_warrant": (
+                decision.step10_warrant.value if decision.step10_warrant is not None else None
+            ),
+        }
+        if actual != expected:
+            print(f"MISMATCH {fixture_path.name}: expected {expected} got {actual}")
+            mismatches += 1
+        else:
+            print(f"OK {fixture_path.name}")
+
+    print(f"{total - mismatches}/{total} fixture(s) matched")
+    return exit_codes.OK if mismatches == 0 else exit_codes.HALT
+
+
+def cmd_dispatch_audit(args: argparse.Namespace) -> int:
+    """`loopr dispatch-audit`. Implements CUSTOMIZATION_PHASE_3_SPEC.md SS4.5: the Opus-avoidance
+    check. A separate check from the fixture suite by explicit requirement -- reads the JSONL
+    dispatch log directly and reports every `loopr-step10` record, HALTing if any lacks a valid
+    `Step10Warrant`."""
+    log_path = Path(args.log)
+    records = read_log(log_path)
+    entries = audit_step10_calls(records)
+    invalid = [entry for entry in entries if not entry.valid]
+
+    for entry in entries:
+        warrant_display = entry.warrant if entry.warrant is not None else "MISSING"
+        round_display = entry.record.get("build_round")
+        reason_display = entry.record.get("reason")
+        print(f"loopr-step10 round={round_display} warrant={warrant_display} reason={reason_display}")
+
+    if invalid:
+        print(
+            f"HALT: {len(invalid)} loopr-step10 dispatch(es) found with a missing or unrecognised "
+            "warrant.",
+            file=sys.stderr,
+        )
+        return exit_codes.HALT
+
+    print(f"{len(entries)} loopr-step10 dispatch(es) found, all carrying a valid warrant.")
+    return exit_codes.OK
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="loopr")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -791,6 +964,28 @@ def _build_parser() -> argparse.ArgumentParser:
     customize_p.add_argument("--modernized-prd-path", default=None)
     customize_p.add_argument("--phase-1-spec-path", default=None)
     customize_p.set_defaults(func=cmd_customize)
+
+    dispatch_p = subparsers.add_parser("dispatch")
+    dispatch_p.add_argument("--state", required=True)
+    dispatch_p.add_argument("--json", action="store_true")
+    dispatch_p.add_argument("--dry-run", action="store_true")
+    dispatch_p.add_argument("--remodernize", action="store_true")
+    dispatch_p.set_defaults(func=cmd_dispatch)
+
+    dispatch_complete_p = subparsers.add_parser("dispatch-complete")
+    dispatch_complete_p.add_argument("--state", required=True)
+    dispatch_complete_p.add_argument(
+        "--verdict", default=None, choices=["clean", "minor", "spec_violating"]
+    )
+    dispatch_complete_p.set_defaults(func=cmd_dispatch_complete)
+
+    dispatch_verify_p = subparsers.add_parser("dispatch-verify")
+    dispatch_verify_p.add_argument("--fixtures", required=True)
+    dispatch_verify_p.set_defaults(func=cmd_dispatch_verify)
+
+    dispatch_audit_p = subparsers.add_parser("dispatch-audit")
+    dispatch_audit_p.add_argument("--log", required=True)
+    dispatch_audit_p.set_defaults(func=cmd_dispatch_audit)
 
     return parser
 

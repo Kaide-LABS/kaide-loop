@@ -101,7 +101,7 @@ class ConditionResult(LooprBase):  # type: ignore[explicit-any]  # pydantic Base
 
 
 class InterrogationState(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
-    schema_version: int = 1
+    schema_version: int = 2
     mode: Mode
     repo_root: str
     problem_statement: str | None = None
@@ -123,6 +123,10 @@ class InterrogationState(LooprBase):  # type: ignore[explicit-any]  # pydantic B
     brownfield: "BrownfieldState | None" = None
     judge_log: list["JudgeExchange"] = Field(default_factory=list)
     customization: "CustomizationState | None" = None
+    dispatch: "DispatchState" = Field(default_factory=lambda: DispatchState())
+    """CUSTOMIZATION_PHASE_3_SPEC.md SS1. Non-optional, unlike `customization`/`brownfield` --
+    decide() must be TOTAL, so there is no third 'dispatch never started' representation distinct
+    from the default instance (models/dispatch.py's own docstring)."""
 
     @model_validator(mode="after")
     def check_mode_coherent(self) -> "InterrogationState":
@@ -134,6 +138,7 @@ class InterrogationState(LooprBase):  # type: ignore[explicit-any]  # pydantic B
 
 from loopr.models.brownfield import BrownfieldState  # noqa: E402
 from loopr.models.customization import CustomizationState  # noqa: E402
+from loopr.models.dispatch import DispatchState  # noqa: E402
 from loopr.models.judge import JudgeExchange  # noqa: E402
 
 InterrogationState.model_rebuild()

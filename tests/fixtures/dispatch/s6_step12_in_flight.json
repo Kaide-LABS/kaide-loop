@@ -1,0 +1,8 @@
+{
+  "derived": false,
+  "derived_reason": "The active-step counterpart of the review states below -- step12 already dispatched, being resumed.",
+  "state": {"active_step": "step_12", "build_round": 1, "last_step12_verdict": null},
+  "artifacts_present": true,
+  "build_complete_present": false,
+  "expected": {"state_id": "s6_step12_in_flight", "target": "loopr-step12", "step10_warrant": null}
+}

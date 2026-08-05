@@ -1,0 +1,8 @@
+{
+  "derived": true,
+  "derived_reason": "CUSTOMIZATION_PHASE_3_SPEC.md SS0.2 deviation 2 -- the confirmed six states contain no terminal state, so this is an architect-derived addition, not one of the user's six pre-written answers.",
+  "state": {"active_step": null, "build_round": 0, "last_step12_verdict": null},
+  "artifacts_present": true,
+  "build_complete_present": true,
+  "expected": {"state_id": "s0_terminal", "target": null, "step10_warrant": null}
+}

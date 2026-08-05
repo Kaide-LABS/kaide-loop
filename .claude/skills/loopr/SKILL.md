@@ -111,8 +111,43 @@ filler is likewise a real failure, never silently retried; nothing is ever writt
 `.claude/agents/` until it's cleared). step11 and step12 don't depend on each other -- customize
 either first, or in parallel. Session topology never matters here: this reads only the state file and
 confirmed artifacts, so whether you're the same session that ran the interrogation or a fresh one
-makes no difference to the result. Driving the phase loop itself (deciding when to dispatch a
-customized subagent) is not yet built -- only customization of all three prompts exists so far.
+makes no difference to the result. Once step10 (at minimum) is customized, step 5 below decides which
+customized subagent actually runs next.
+
+### 5. Dispatch -- decide which subagent runs next (optional, once at least step10 is customized)
+
+```
+loopr dispatch --state <target>/.loopr-state/state.json [--json] [--dry-run] [--remodernize]
+```
+
+A deterministic controller, not a judgment call -- it reads three persisted state fields plus two
+live disk facts and names exactly one of `loopr-step10`, `loopr-step11`, or `loopr-step12` to run
+next, or reports the build is already complete. Zero LLM calls, zero heuristics: this is the same
+class of mechanism as the six-condition test's *structural* layer, never its judge layer, so there is
+nothing here for you to answer or adjudicate. Print the human block verbatim to the user and dispatch
+whatever it names -- do not re-derive the decision yourself, and do not second-guess a HALT by
+dispatching `loopr-step10` anyway "to be safe": an unrecognised or incoherent state HALTs by design
+(`loopr-PRD.md` section 6 B6, PROJECT HARD BOUNDARY) and printing the state for a human to look at is
+the correct behaviour, not a gap to route around.
+
+| Exit | Name | What you do |
+|---|---|---|
+| `0` | `OK` | A subagent was named and the state was updated. Dispatch the printed `Task(...)` line. |
+| `50` | `COMPLETE` | `BUILD_COMPLETE.md` exists; nothing left to dispatch. |
+| `40` | `HALT` | The state is incoherent. Show the printed block to the user; do not dispatch anything, especially not `loopr-step10`. |
+| `2` | `USAGE` | `--remodernize` was given while a step was already in flight. |
+
+After the dispatched subagent finishes, record it:
+
+```
+loopr dispatch-complete --state <target>/.loopr-state/state.json [--verdict {clean,minor,spec_violating}]
+```
+
+`--verdict` is required when the completed step was `loopr-step12` and forbidden otherwise -- never
+default it; a defaulted verdict fabricates a review outcome that did not happen. Two more commands
+exist for auditing, not for the normal loop: `loopr dispatch-verify --fixtures <dir>` re-runs the
+fixture suite as a single pass/fail command, and `loopr dispatch-audit --log <path>` greps the
+append-only dispatch log for every `loopr-step10` call and fails if any lacks a real warrant.
 
 ### Optional: verify reproducibility
 

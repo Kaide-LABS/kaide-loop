@@ -108,14 +108,37 @@ def test_old_envelope_version_record_still_loads_after_scope_amendment(tmp_path:
 
 def test_corrupt_state_file_raises_clean_loopr_error_not_raw_traceback(tmp_path: Path) -> None:
     """Regression: every other failure mode in this module maps to a clean LooprError/exit code --
-    a malformed state file used to crash with an uncaught pydantic.ValidationError instead."""
+    a malformed state file used to crash with an uncaught pydantic.ValidationError instead.
+
+    CUSTOMIZATION_PHASE_3_SPEC.md SS5: schema_version bumped 1 -> 2 for the new `dispatch` field, so
+    this payload must now carry schema_version=2 -- otherwise it would raise StateVersionError at the
+    version gate before ever reaching the bad-`mode` validation this test actually means to exercise
+    (StateVersionError is itself a StateLoadError, so the old payload would still "pass" here, just
+    for the wrong reason -- see test_well_formed_v1_payload_raises_state_version_error below for the
+    version-gate case, tested directly)."""
     path = tmp_path / "state.json"
     path.write_text(
-        json.dumps({"schema_version": 1, "mode": "not-a-real-mode", "repo_root": str(tmp_path)}),
+        json.dumps({"schema_version": 2, "mode": "not-a-real-mode", "repo_root": str(tmp_path)}),
         encoding="utf-8",
     )
     store = StateStore(path)
     with pytest.raises(StateLoadError):
+        store.load()
+
+
+def test_well_formed_v1_payload_raises_state_version_error(tmp_path: Path) -> None:
+    """CUSTOMIZATION_PHASE_3_SPEC.md SS5: no migration path exists -- a well-formed v1 state file
+    (valid in every way except its schema_version) must hard-fail, never be silently upgraded or
+    reinterpreted. Demonstrated firing with a payload that is otherwise completely valid, so the
+    failure is provably about the version gate and nothing else."""
+    v1_state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path))
+    payload = json.loads(v1_state.model_dump_json())
+    payload["schema_version"] = 1
+    del payload["dispatch"]  # a real v1 payload predates this field entirely
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    store = StateStore(path)
+    with pytest.raises(StateVersionError):
         store.load()
 
 
@@ -182,6 +205,30 @@ def test_step11_step12_customization_state_round_trips(tmp_path: Path) -> None:
     assert c.step11_fidelity is not None and c.step11_fidelity.detail == "ok11"
     assert c.step12_skeleton is not None and c.step12_skeleton.sections == ["## ROLE", "### SUB"]
     assert c.step12_fidelity is not None and c.step12_fidelity.detail == "ok12"
+
+
+def test_dispatch_state_round_trips(tmp_path: Path) -> None:
+    """CUSTOMIZATION_PHASE_3_SPEC.md SS1: `dispatch` is always present (non-optional, unlike
+    `customization`/`brownfield`) and round-trips through save/load like every other field."""
+    from loopr.models.common import CustomizationStep
+
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path))
+    assert state.dispatch is not None
+    assert state.dispatch.active_step is None
+    assert state.dispatch.build_round == 0
+    assert state.dispatch.last_step12_verdict is None
+
+    state.dispatch.active_step = CustomizationStep.STEP_11
+    state.dispatch.build_round = 3
+    store = StateStore(tmp_path / "state.json")
+    store.save(state)
+    reloaded = store.load()
+
+    assert reloaded.dispatch.active_step == CustomizationStep.STEP_11
+    assert reloaded.dispatch.build_round == 3
+    assert reloaded.dispatch.last_step12_verdict is None
+    assert reloaded == state
+    assert reloaded.schema_version == 2
 
 
 def test_customization_state_supports_step11_without_step10_populated(tmp_path: Path) -> None:

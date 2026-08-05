@@ -1,0 +1,8 @@
+{
+  "derived": false,
+  "derived_reason": "One of the user's six pre-written answers: 'step12 minor -> loopr-step11' (CUSTOMIZATION_PHASE_3_SPEC.md SS8 criterion 4).",
+  "state": {"active_step": null, "build_round": 2, "last_step12_verdict": "minor"},
+  "artifacts_present": true,
+  "build_complete_present": false,
+  "expected": {"state_id": "s8_step12_minor", "target": "loopr-step11", "step10_warrant": null}
+}

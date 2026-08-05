@@ -4,7 +4,8 @@
 > everything decided since first expansion (brownfield in v1 scope, the six-condition stopping test
 > operationalized in `docs/stopping-test-spec.md`, the pattern-conformance classification specified
 > in `docs/conformance-classification-spec.md`), and **modernized 2026-07-28** against verified
-> current dependency versions and 2024–2026 literature — see `## MODERNIZATION CHANGELOG` at the foot
+> current dependency versions and 2024–2026 literature, then **re-modernized 2026-08-04** for the
+> customization layer's Phase 3 (dispatch controller) — see `## MODERNIZATION CHANGELOG` at the foot
 > of this document, and `docs/modernization_log.md` for the version pins.
 > `loopr-MIGRATION.md` is now a historical record of how those decisions were reached, not the active
 > overlay — this PRD is the current source of truth again.
@@ -339,6 +340,76 @@ The audit's narrow job: did the junior reviewer MISS anything on the known high-
 
 Unattended is the destination; **supervised-first-run is the on-ramp.** loopr defaults to supervised (pause at each phase boundary) on the first run of any given project, then unattended after. This protects a stranger from an unproven loop going hands-off on their first try, and it mirrors the discipline the author uses.
 
+### B6. The dispatch controller — narrower than Phase B, and not a step toward it (added 2026-08-04)
+
+The customization layer (section 14, step 3) generates three subagents — `loopr-step10`,
+`loopr-step11`, `loopr-step12` — with their models and effort pinned in config
+(`CUSTOMIZATION_PHASE_1_SPEC.md` §6.1a). Generating a dispatchable subagent is not the same as
+deciding *when* to dispatch it, and that decision was left explicitly open
+(`CUSTOMIZATION_PHASE_1_SPEC.md` §0's forward note, §7.2). **Customization Phase 3 closes it, and it
+closes it as narrowly as possible:** a deterministic controller that reads the current run's state
+and names which of those three already-existing subagents runs next.
+
+**What it is:** a pure, total decision function over a small finite state space. Zero LLM calls, zero
+judge calls, zero heuristics — the same class of mechanism as the six-condition test's *structural*
+layer, not its judge layer. Its inputs are three persisted state fields (`active_step`,
+`build_round`, `last_step12_verdict`) plus two live disk facts (do step10's execution artifacts
+exist; does `BUILD_COMPLETE.md` exist). Every state maps to exactly one target or to a loud HALT.
+
+**What it is emphatically not:** Phase B. It does not orchestrate a build→review→audit loop, does not
+implement git-marker phase discovery (that stays inside the step11/step12 prompts themselves, per
+`CUSTOMIZATION_PHASE_1_SPEC.md` §7.2), does not re-run gates as ground truth, does not add an audit
+tier, and does not adapt Traycer. Phase B's three invariants remain unbuilt and parked. A dispatcher
+that says "run `loopr-step11` next" is a signpost, not a harness.
+
+**PROJECT HARD BOUNDARY — the Opus-escalation floor.** `loopr-step10` is the Opus-tier subagent. The
+controller may name it in exactly two circumstances: **(a)** step10's execution artifacts do not
+exist on disk (greenfield PRD work), or **(b)** re-modernization was explicitly requested by the
+operator. **Uncertainty is never a third circumstance.** A controller that defaults to step10 when it
+cannot classify its state — "escalate to be safe" — violates this boundary; the correct behaviour on
+an unrecognised or incoherent state is a HALT with the state printed, never a dispatch. This is the
+single regression the confirmed acceptance criteria name as most load-bearing, which is why they
+require a dedicated log-grep check for it separate from the fixture pass/fail.
+
+The literature makes this a measured failure mode rather than a stylistic preference. In cascade
+routing, "single-model tiers at each stage falter on ambiguous queries, triggering premature
+escalations to costlier models or experts due to under-confidence," and "ambiguous inputs thus
+trigger premature escalations … wasting compute on unnecessary upgrades"
+([Chang, Kwon, Lee & Verma, *CascadeDebate*, arXiv:2604.12262](https://arxiv.org/abs/2604.12262) §1).
+The usual mitigation — thresholding on a model's own confidence — is itself unreliable: LLM
+confidence scores "are typically miscalibrated and are sensitive to prompt wording," and "threshold
+choices that work in one workload often fail in another"
+([Kotte, *UCCI*, arXiv:2605.18796](https://arxiv.org/abs/2605.18796) §1; calibration moves ECE from
+0.12 to 0.03, §6.2 Fig. 1). loopr's answer is to remove the confidence signal from the loop entirely:
+the controller has no uncertainty score to threshold on, because it is a total function over a
+discrete, enumerated state space. That is the strongest available form of the deterministic-anchor
+invariant — not "the LLM never has the last word," but "no LLM is consulted at all."
+
+**Legibility is a first-class requirement, not polish.** This phase exists to remove a manual step the
+author is performing by hand; a correct decision the author still re-derives by hand has failed on
+its actual purpose (`.claude/loopr/context.md`). Every dispatch therefore prints the target, the
+named state it matched, the reason, and — on every decision, including non-step10 ones — why step10
+was *not* chosen. That last line is simultaneously the human's spot-check and the machine-greppable
+Opus-avoidance record. The trust risk runs both ways: surveyed developers report 84% AI-tool use
+against 29% trust ([Stack Overflow, *Closing the developer AI trust gap*, 2026-02-18](https://stackoverflow.blog/2026/02/18/closing-the-developer-ai-trust-gap/)),
+while the automation-bias literature warns that authoritative-looking output invites unchecked
+acceptance. A one-line, falsifiable reason serves both: cheap enough to spot-check in seconds,
+specific enough that a wrong one is visibly wrong.
+
+**Prior art, honestly placed.** A deterministic control plane above an agent harness — specifically "a
+phase state machine with requirement-to-file-to-test traceability" — is an active proposal rather
+than a validated technique ([Madatha, *A Deterministic Control Plane for LLM Coding Agents*,
+arXiv:2606.26924](https://arxiv.org/abs/2606.26924)). That paper's *measured* contribution is a
+prevalence study of 10,008 public repositories (n=6,145 agent config files), which found agent
+configurations are rarely revised (58% single-commit) and rarely declare permission boundaries
+(**<1%** of agent configs versus **33%** of GitHub Actions workflows, n=31 true positives) — evidence
+for the gap, not for the fix. The related closed-loop-determinism proposal, CAAF, names "stochastic
+oscillation during self-correction" as the failure its deterministic assertion layer exists to close
+([Zhang, arXiv:2604.17025](https://arxiv.org/abs/2604.17025), abstract; **[UNVERIFIED — its ablation
+tables were not readable from the PDF this pass; only the abstract-level claim is relied upon]**).
+Read together: declaring the escalation boundary in config, where it can be grepped, is exactly the
+thing the field is documented as *not* doing.
+
 ---
 
 ## 7. Continuity model (iteration without losing the founding context)
@@ -384,6 +455,12 @@ Canonical copy with verification method and dates: `docs/modernization_log.md`. 
 | Python | **3.14** (floor `>=3.14`); toolchain confirmed on 3.14.4 | `py --version` → `Python 3.14.4`; [python.org/downloads](https://www.python.org/downloads/) |
 | Pydantic | **`pydantic>=2.13,<3`** (latest 2.13.4) | `pip index versions pydantic` → LATEST 2.13.4 |
 | mypy | **`mypy>=2.3,<3`** (latest 2.3.0) | `pip index versions mypy` → LATEST 2.3.0; [changelog](https://mypy.readthedocs.io/en/stable/changelog.html) |
+
+**Re-verified 2026-08-04, all three unchanged** — `py --version` → `Python 3.14.4`;
+`pip index versions pydantic` → `LATEST: 2.13.4`; `pip index versions mypy` → `LATEST: 2.3.0`
+(now also the *installed* version, closing the gap `docs/modernization_log.md` flagged on 2026-07-28).
+No pin moved and no API shape changed; recorded because "nothing drifted" is a finding, and its
+absence from a changelog is indistinguishable from not having checked.
 
 Three notes that matter for the build:
 
@@ -476,6 +553,39 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
   rather than proving cruft; and the rubric names each signal's known weakness inline so the judge is
   told what not to over-trust. The review agent checks the rubric text for these qualifiers.
 
+*Four entries added 2026-08-04 from the dispatch-controller research pass (section 6 B6):*
+
+- **Escalation-by-default (the named hard-boundary breach).** The controller reaches a state it cannot
+  classify and dispatches the Opus-tier `loopr-step10` rather than stopping — "safer to escalate."
+  This is the exact behaviour the cascade literature measures as premature escalation on ambiguous
+  input (arXiv:2604.12262 §1), and it silently converts every unmodelled state into the most
+  expensive possible call. Mitigations, all four required: step10 is reachable from exactly two
+  enumerated branches and no default/else/except path; the decision record carries a closed-enum
+  warrant that has no "uncertain" member, enforced by a model validator so an unwarranted step10
+  decision is *unconstructable*; unrecognised or incoherent states HALT with the state printed;
+  and a dedicated log audit greps every logged step10 dispatch and fails if any lacks a warrant.
+- **Silent state drift between the recorded verdict and reality.** `last_step12_verdict` is written by
+  whoever completes step12; if it is stale, wrong, or never written, the controller routes confidently
+  off a false premise — and a deterministic controller is *more* dangerous here than a hedging one,
+  because it will not second-guess its input. Mitigations: the state-completing command is the only
+  writer and it is a single explicit act; the verdict is cleared to `none` the moment step11 is
+  dispatched, so a stale verdict cannot survive into the next round; and combinations that cannot
+  arise from a legal transition (a verdict with `build_round == 0`; any built state with step10's
+  artifacts absent) are rejected rather than routed.
+- **Illegible automation the operator keeps re-checking.** The controller is correct, and the operator
+  still verifies its choice by hand every round — so the manual step this phase exists to remove is
+  not removed, and every fixture passing green would never surface it (`.claude/loopr/context.md`).
+  Mitigation: a four-line human-readable decision block (target / matched state / why / why-not-step10)
+  plus a copy-pasteable dispatch line, with `--json` reserved for machine consumers. The failure
+  signal is behavioural, and it is stated as an acceptance criterion rather than left to taste:
+  re-verifying the controller's choice by hand more than once or twice while dogfooding is a fail.
+- **Scope leak into Phase B.** "Sequencing" quietly grows into git-marker phase discovery, gate
+  re-running, retry/backoff, or an audit tier — each individually defensible, collectively the parked
+  harness rebuilt by accident. Mitigation: the controller's entire input set is enumerated (three
+  state fields, two disk facts) and anything requiring memory of prior rounds is an open question by
+  construction, not a feature; the review agent checks the module's imports and inputs against that
+  list.
+
 ## 11. Human gates (summary)
 
 - **Spec phase (2 hard gates, always; a conditional 3rd for brownfield):** confirm/tweak boundary
@@ -513,7 +623,16 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
 2. **Package as a Claude Code skill** (`.claude/skills/loopr/`, section 9) — only after step 1 is
    proven. Not a v1-launch requirement; a packaging step after the core is validated.
 3. **Prompt/gate/subagent generation** (the A5 outputs) — customized per project once the module
-   exists.
+   exists. **In progress; split into three phases of its own** (namespaced `CUSTOMIZATION_PHASE_N_SPEC.md`,
+   a third additive series alongside `PHASE_1_SPEC.md` and `SKILL_PHASE_1_SPEC.md`):
+   **3.1** step10 customization + the two-layer fidelity check + CLI + state — shipped and approved
+   (`3e25f41`), amended to emit `.claude/agents/loopr-step10.md` (`6eebfe6`).
+   **3.2** step11/step12 customization from step10's *executed* output — implemented (`f39315b`),
+   reviewed (`74eea57`).
+   **3.3** dispatch controller — which of the three generated subagents runs next, decided
+   deterministically from run state (section 6 B6, `CUSTOMIZATION_PHASE_3_SPEC.md`). This is the
+   phase that closes the open question `CUSTOMIZATION_PHASE_1_SPEC.md` §0 flagged forward, and it
+   closes it *without* reopening Phase B.
 4. **Phased loop (Phase B), parked, much later** — adapting Traycer (Apache-2.0), not a native port
    of the abandoned Docker harness. First task when this step begins: actually assess Traycer against
    the three invariants (`loopr-PRD.md` section 6/`loopr-MIGRATION.md` section 5); it hasn't been
@@ -543,6 +662,26 @@ decision recorded in `loopr-MIGRATION.md`.
   section 9).
 - Traycer suitability — named as the step-3/Phase-B adaptation target, not yet evaluated against the
   three invariants.
+- **Rework ping-pong has no cap (raised 2026-08-04, deliberately not built).** The dispatch controller
+  routes a spec-violating step12 verdict back to `loopr-step11` for the same phase. Nothing bounds how
+  many times that can cycle. A cap is the obvious guard, and it is exactly the case the confirmed
+  scope edge parks: deciding it requires remembering *prior* rounds, not just the current one, and the
+  boundary says such a case "should surface as an open question, not get silently built in." Surfaced
+  here. `build_round` is persisted and logged, so the data to build a cap exists the moment a policy
+  for it is decided — the counter is not the missing piece, the policy is.
+- **Who writes `last_step12_verdict`, and how severity is graded (raised 2026-08-04).** The verdict is
+  recorded by an explicit act at step12's completion, not inferred. Deriving it instead from git
+  markers (`chore: Phase N review approved` present/absent, `fix: Phase N review patch` present/absent)
+  was considered and declined for Phase 3 — it would pull git-marker discovery into the controller,
+  which the confirmed boundary does not name and section 6 B6 explicitly excludes. Worth revisiting
+  only if recorded verdicts are observed drifting from reality in practice.
+- **`step_12`'s own approve/reject is binary; the controller's verdict space is three-valued
+  (raised 2026-08-04).** The template says approval is "either clean or not… no 'approve with minor
+  follow-ups'", while the confirmed acceptance criteria require `clean` / `minor` / `spec-violating` to
+  be distinguishable. These are reconcilable rather than contradictory — `minor` denotes *approved
+  after step12 patched the issue itself*, which the template's own THE FIX section already describes,
+  and it routes identically to `clean`. Recorded because the distinction is a logging and
+  falsifiability requirement, not a routing one, and a future reader should not "simplify" it away.
 
 **Deferred until step 2 (skill packaging), not decided now:**
 - Final naming of the two PRDs in user-facing copy ("baby PRD" is internal; user-facing may want gentler terms).
@@ -558,6 +697,115 @@ decision recorded in `loopr-MIGRATION.md`.
 ---
 
 ## MODERNIZATION CHANGELOG
+
+### Entry 3 — 2026-08-04 (Step 10: PRD re-modernization + customization Phase 3 blueprinting)
+
+Scope: ground this PRD for the customization layer's **Phase 3 — the dispatch controller** (which of
+`loopr-step10`/`step11`/`step12` runs next), then build `CUSTOMIZATION_PHASE_3_SPEC.md` from the
+result. Additive to Entries 1–2; neither is amended. **No locked architectural decision was changed,
+and no `## OPEN ARCHITECTURE QUESTIONS` block was required** — see "Escalations considered and
+declined" at the end of this entry.
+
+**A. Version and API pinning — re-verified, nothing moved.**
+
+| Check | Result | Source |
+|---|---|---|
+| Python `>=3.14` | unchanged; toolchain on 3.14.4 | `py --version` → `Python 3.14.4` |
+| `pydantic>=2.13,<3` | unchanged; 2.13.4 still latest | `pip index versions pydantic` → `LATEST: 2.13.4` |
+| `mypy>=2.3,<3` | unchanged; 2.3.0 still latest, **and now the installed version** — the Entry-2 gap (installed 2.0.0 < pin) is closed | `pip index versions mypy` → `LATEST: 2.3.0`, `INSTALLED: 2.3.0` |
+| pytest | latest 9.1.1, installed 9.0.3; **deliberately not pinned in this PRD** — it is a dev-group floor (`pytest>=8`) in `pyproject.toml`, not a runtime dependency | `pip index versions pytest` |
+| Pydantic API shape | no correction needed; `model_config = ConfigDict(extra='forbid')` still current | [Pydantic config docs](https://docs.pydantic.dev/latest/api/config/) |
+| Subagent frontmatter `effort` | **confirmed as a real per-subagent frontmatter field**, closing the flag raised in `CUSTOMIZATION_PHASE_1_SPEC.md` §6.1a — shipped per feature request #31536 and documented as overriding the session effort level | Web search corroborating the in-repo verification at `6eebfe6`; [Developers Digest — Subagent Frontmatter](https://www.developersdigest.tech/guides/subagent-frontmatter), [Tembo — Claude Code Subagents 2026](https://www.tembo.io/blog/claude-code-subagents) |
+
+**Model strings: still none pinned in loopr's own code, and Phase 3 does not change that.** The
+dispatcher names *subagent names* (`loopr-step10`), never model IDs; the model/effort pins live as
+module-level constants in `customization/customize.py` and use coarse tier keywords (`opus`,
+`sonnet`) rather than dated model IDs, which is what real shipped agent definitions use. The current
+first-party IDs (`claude-opus-5`, `claude-sonnet-5`) were checked and deliberately **not** written
+into any artifact — a dated ID in a subagent frontmatter would be a regression, not a modernization.
+
+**B. Literature validation of Phase 3's core method** (new grounding block, section 6 B6). Research
+focus, extracted from §1's scan: *deterministic (non-learned) routing between LLM tiers, and
+state-machine control planes above an agent harness.*
+
+| Design element | Verdict | Source |
+|---|---|---|
+| Escalate-only-when-warranted; never escalate under uncertainty | **Strongly supported — this is a named, measured failure mode.** "Single-model tiers … falter on ambiguous queries, triggering premature escalations to costlier models"; "ambiguous inputs thus trigger premature escalations … wasting compute on unnecessary upgrades" | [arXiv:2604.12262](https://arxiv.org/abs/2604.12262) §1 |
+| Do **not** build the router on a confidence/uncertainty signal | **Supported.** LLM confidence "typically miscalibrated and … sensitive to prompt wording"; "threshold choices that work in one workload often fail in another"; ECE 0.12 → 0.03 only after explicit calibration | [arXiv:2605.18796](https://arxiv.org/abs/2605.18796) §1, §6.2 (Fig. 1) |
+| A deterministic phase state machine above the harness | **Proposed, not validated.** The paper proposes exactly this shape; its *measured* result is a config-hygiene prevalence study, not an efficacy evaluation | [arXiv:2606.26924](https://arxiv.org/abs/2606.26924) |
+| Declaring the escalation boundary in config where it can be grepped | **Supported as a gap worth closing** — <1% of 6,145 agent config files across 10,008 repos declare permission boundaries, vs 33% of Actions workflows (n=31); 58% of configs are single-commit | [arXiv:2606.26924](https://arxiv.org/abs/2606.26924) |
+| Deterministic assertion layer closing "stochastic oscillation during self-correction" | **Directionally supportive; abstract-level only** | [arXiv:2604.17025](https://arxiv.org/abs/2604.17025) — **[UNVERIFIED: PDF body not extractable this pass; ablation tables unread]** |
+| Trust calibration / verification burden (the `context.md` failure mode) | **Relevant but indirect.** 84% developer AI-tool use vs 29% trust (down 11pp YoY) is self-reported survey data about tools generally, not a measurement of this controller | [Stack Overflow, 2026-02-18](https://stackoverflow.blog/2026/02/18/closing-the-developer-ai-trust-gap/) — **[UNVERIFIED as applied to this design; cited for the direction only]** |
+
+**C. Enhancements applied within the locked architecture** (three, all in the new section 6 B6 and
+carried into `CUSTOMIZATION_PHASE_3_SPEC.md`):
+
+1. **Zero LLM calls in the dispatcher — stated as the strongest form of the deterministic-anchor
+   invariant, not merely as an implementation detail.** §3's invariant says a deterministic layer must
+   anchor any LLM judgment; here there is no LLM judgment to anchor, and the miscalibration finding
+   ([arXiv:2605.18796](https://arxiv.org/abs/2605.18796) §1) is the reason that is the right design
+   rather than an under-ambitious one.
+2. **The step10 warrant is a closed two-member enum with no "uncertain" value, enforced by a
+   `model_validator` so an unwarranted step10 decision cannot be constructed.** This upgrades the
+   boundary from a rule the reviewer greps for to a state the type system rejects — a direct response
+   to the finding that escalation-under-uncertainty is the measured failure, not a hypothetical one.
+3. **Every decision record — not just step10 ones — carries `step10_declined_because`.** Absence of a
+   step10 dispatch is thereby positive evidence rather than silence, which is what makes the
+   acceptance criteria's log-grep a real check instead of a search for something that may simply not
+   have been written.
+
+**D. Failure-mode catalogue extended** — four entries added to section 10: *escalation-by-default*,
+*silent state drift between the recorded verdict and reality*, *illegible automation the operator
+keeps re-checking*, *scope leak into Phase B*. Each carries its mitigation and a review-agent check.
+
+**E. Open decisions added** — three, in section 15: the uncapped rework ping-pong (parked by the
+confirmed scope edge's own threshold clause), who writes `last_step12_verdict` and why git-marker
+derivation was declined for this phase, and the reconciliation between `step_12`'s binary approval
+discipline and the three-valued verdict the acceptance criteria require. **[UNVERIFIED — design
+decisions, not literature or vendor claims; no external source applies.]**
+
+**F. Build phasing updated** — section 14 step 3 now names the customization layer's three phases and
+their shipped/in-progress status, so a reader cannot mistake Phase 3 for Phase B.
+
+**G. Citation-discipline disclosure (tooling gaps, two of them).** Literature grounding this pass ran
+on **native web search plus direct `WebFetch` against arxiv.org HTML**, and paper *sections* were read
+(not abstracts) for the two load-bearing citations — arXiv:2604.12262 §1 and arXiv:2605.18796 §1/§6.2.
+Two capabilities degraded and are disclosed rather than silently substituted:
+`/arxiv` returned one successful query and then **HTTP 429 rate-limited** for the remainder of the
+pass; `/paper-search`'s **arXiv source now returns an empty list for every query**, including a
+single-word control query (`transformer`) — a regression against the patched state Entry 2 recorded,
+and a second broken source alongside the Google Scholar gap Entry 2 already disclosed and left open.
+**GitHub MCP was not available in this session at all** and was skipped, not substituted: dependency
+reality was verified against the local package index (`pip index versions`) instead, which is a
+weaker source than real packaging metadata for a *missing* package, though adequate for the
+version-drift check that was actually needed. One citation (arXiv:2604.17025) is abstract-level only
+and is tagged **[UNVERIFIED]** at every use.
+
+**Escalations considered and declined** (stated explicitly, since silence would be indistinguishable
+from not having looked):
+
+- *Candidate 1: the confirmed boundary says the new fields go "on `InterrogationState`", and the spec
+  nests them under `InterrogationState.dispatch` instead.* Declined as an escalation, disclosed as a
+  deviation. The field **set** is exactly the three named — nothing added, nothing dropped. Nesting
+  follows the established precedent for every other subsystem's state (`brownfield`, `customization`,
+  `gates`) and structurally prevents the one conflation the boundary explicitly warns against
+  (`state.round` vs `state.dispatch.build_round`). A shape choice that strengthens a constraint the
+  boundary itself states is an enhancement sitting on top of the design, not through it.
+- *Candidate 2: is `build_round` actually load-bearing, or a field the boundary named that the routing
+  decision never reads?* Checked rather than assumed, and it is load-bearing: `build_round` is the
+  **only** discriminator between "step10 finished, nothing built yet → dispatch step11" and "step11
+  finished, awaiting review → dispatch step12". Both present as `active_step = none` with no recorded
+  verdict; `build_round == 0` versus `>= 1` is what separates them. Without it the controller cannot
+  be total, so no escalation applies. Recorded because the opposite conclusion was the plausible one
+  and stating it untested would have been the error. What `build_round` is *not* used for is a rework
+  cap — that use is parked by the same boundary's threshold clause (section 15).
+- *Candidate 3: the enumerated state set the acceptance criteria list is incomplete — nothing in it
+  ever dispatches step12.* Declined as an escalation; handled as a disclosed completion. Two states
+  are added (`step11 finished, awaiting review` → step12; `BUILD_COMPLETE.md exists` → terminal),
+  both forced by the criteria's own requirement that the set be finite and *complete*. Every state the
+  user pre-specified keeps exactly the dispatch the user pre-specified; the additions are the states
+  the user's list implies but does not name, and they are flagged as additions in the spec so the
+  pre-written answers stay distinguishable from the derived ones.
 
 ### Entry 2 — 2026-07-28 (Step 10: PRD modernization + Phase 1 blueprinting)
 

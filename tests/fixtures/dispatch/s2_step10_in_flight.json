@@ -1,0 +1,12 @@
+{
+  "derived": false,
+  "derived_reason": "The active-step half of the user's first pre-written answer, resuming an already-dispatched step10 -- here via the --remodernize path (artifacts present) rather than the fresh-greenfield path S1 already covers.",
+  "state": {"active_step": "step_10", "build_round": 0, "last_step12_verdict": null},
+  "artifacts_present": true,
+  "build_complete_present": false,
+  "expected": {
+    "state_id": "s2_step10_in_flight",
+    "target": "loopr-step10",
+    "step10_warrant": "explicit_remodernization"
+  }
+}

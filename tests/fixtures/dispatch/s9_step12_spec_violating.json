@@ -1,0 +1,12 @@
+{
+  "derived": false,
+  "derived_reason": "One of the user's six pre-written answers: 'step12 spec-violating -> loopr-step11 (not loopr-step10)' (CUSTOMIZATION_PHASE_3_SPEC.md SS8 criterion 4) -- the single most load-bearing fixture in this directory, since routing an escalation here to step10 instead would be exactly the forbidden hard-boundary breach.",
+  "state": {"active_step": null, "build_round": 2, "last_step12_verdict": "spec_violating"},
+  "artifacts_present": true,
+  "build_complete_present": false,
+  "expected": {
+    "state_id": "s9_step12_spec_violating",
+    "target": "loopr-step11",
+    "step10_warrant": null
+  }
+}

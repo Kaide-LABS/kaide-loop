@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from loopr.errors import StateLoadError
 from loopr.models.interrogation import InterrogationState
 
-_CURRENT_SCHEMA_VERSION = 1
+_CURRENT_SCHEMA_VERSION = 2
 
 
 class StateVersionError(StateLoadError):

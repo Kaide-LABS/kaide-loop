@@ -1,0 +1,8 @@
+{
+  "derived": false,
+  "derived_reason": "One of the user's six pre-written answers: 'step11 mid-round -> loopr-step11' (CUSTOMIZATION_PHASE_3_SPEC.md SS8 criterion 4).",
+  "state": {"active_step": "step_11", "build_round": 0, "last_step12_verdict": null},
+  "artifacts_present": true,
+  "build_complete_present": false,
+  "expected": {"state_id": "s4_step11_in_flight", "target": "loopr-step11", "step10_warrant": null}
+}
