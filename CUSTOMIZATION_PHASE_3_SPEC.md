@@ -320,6 +320,7 @@ failure (`loopr-MIGRATION.md` §7).
 
 ```
 loopr dispatch --state <state.json> [--json] [--dry-run] [--remodernize]
+                [--modernized-prd-path PATH] [--phase-1-spec-path PATH]
 ```
 
 | Flag | Meaning |
@@ -328,6 +329,22 @@ loopr dispatch --state <state.json> [--json] [--dry-run] [--remodernize]
 | `--json` | emit `DispatchDecision.model_dump_json(indent=2)` instead of the human block |
 | `--dry-run` | decide and print; **do not** mutate state, **do not** append to the log |
 | `--remodernize` | the operator act that makes `EXPLICIT_REMODERNIZATION` reachable (§4.2) |
+| `--modernized-prd-path` / `--phase-1-spec-path` | **added 2026-08-05**, amendment, see below |
+
+**Amendment (2026-08-05): step10-artifact override flags, threaded through from `customize`.** The
+first real `loopr dispatch` run against this project's own state (`.loopr-state/state.json`) HALTed
+immediately — `find_step10_execution_artifacts` correctly detected that this repo carries two genuine
+phase-spec-shaped files (`PHASE_1_SPEC.md` and `CUSTOMIZATION_PHASE_3_SPEC.md`, both legitimately
+built from the same modernised PRD, per G8's own "a mature repo can legitimately carry more than one
+valid phase-spec artifact permanently" rule) and raised the ambiguity it's supposed to raise — but
+`dispatch` had no flag for a human to resolve it with. `customize` had gained exactly this override
+mechanism in a prior fix (bebdce3); `dispatch` called the same detector directly with no arguments at
+all (cli.py, prior to this amendment). Fixed by reusing `_resolve_step10_artifact_overrides` and
+threading its result into `dispatch`'s own `find_step10_execution_artifacts` call — no new resolver,
+no new persisted state field (G7), no second artifact detector (G8). This is not a corrected oversight
+in the original design so much as the first real dispatch run surfacing a wiring gap the design didn't
+anticipate: the override was added where `customize` needed it and not yet threaded to every other
+caller of the same gate.
 
 | Outcome | Exit | Behaviour |
 |---|---|---|
@@ -699,6 +716,18 @@ Concrete and testable. 1–8 are mechanical; 9 is behavioural and is not optiona
    is a **fail** even with every other criterion green, and the remedy is `render_human()`'s shape
    (§4.3) — not a code fix elsewhere. Stated as a criterion because `.claude/loopr/context.md` names
    it as the failure mode most likely to be missed.
+
+   **Amendment (2026-08-05): first real data point.** The first genuine `loopr dispatch` run against
+   this repo's own state was not a legibility failure, but a functional one: `dispatch` HALTed outright
+   on the `PHASE_1_SPEC.md` / `CUSTOMIZATION_PHASE_3_SPEC.md` ambiguity `find_step10_execution_artifacts`
+   correctly detects (per §4.1's amendment note above), with no override flag to resolve it — the run
+   never reached the point where legibility could even be assessed. This criterion's status moves from
+   "unverified, no signal yet" to "one real run recorded, and it surfaced a genuine gap in `dispatch`'s
+   CLI surface, not a rendering concern." Re-run after the override-flag fix landed:
+   `loopr dispatch --state .loopr-state/state.json --dry-run --phase-1-spec-path
+   CUSTOMIZATION_PHASE_3_SPEC.md` produces a normal `DISPATCH`/`STATE`/`WHY`/`NOT-STEP10` block,
+   re-verified by hand in one look — the legibility check itself still passes once the run can proceed
+   at all.
 10. **`mypy --strict` clean; full suite green;** `test_no_paid_dependency` and
     `test_no_hardcoded_domain` still passing; `tests/test_dispatch_boundary.py` (G1–G3, G5, G7, G8)
     passing.

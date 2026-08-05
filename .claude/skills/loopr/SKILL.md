@@ -15,6 +15,24 @@ rendering -- it drives the existing CLI contract (`PHASE_1_SPEC.md` §6.1) faith
 Invoke deliberately (`/loopr`), never automatically -- a builder who just wants a quick edit should
 never have this triggered on them.
 
+## Session role (read this first, before Preflight)
+
+Invoking this skill makes this session the **architect** for whatever it's about to work on: it
+produces specs, directives, and reviews (via the interrogation loop below), and independently
+verifies what comes back. It does **not** write the target project's own application code directly
+-- that happens in a separate executor session or subagent, dispatched via a directive or via
+`loopr dispatch`'s customized subagents (step 5 below). This is an operator convention this skill
+documents for the session's own orientation, not something the module's code enforces or knows
+about -- `src/loopr/` never branches on session identity or role, and nothing in this convention
+should ever be threaded into a judge call's inputs.
+
+Before Preflight: check whether the target project has its own root-level orientation file (commonly
+`ARCHITECT.md`, but the project may name it differently -- look for one before assuming there isn't
+one). If it exists, read it fully before anything else; it carries this specific project's own
+status pointers (what's built, what's open) that this skill has no way to know generically. If it
+doesn't exist, proceed to Preflight directly -- its absence is not an error, just a project that
+hasn't set one up.
+
 ## Preflight (do this first, before anything else)
 
 Before any interrogation logic, confirm `loopr` is importable:
@@ -118,6 +136,7 @@ customized subagent actually runs next.
 
 ```
 loopr dispatch --state <target>/.loopr-state/state.json [--json] [--dry-run] [--remodernize]
+                [--modernized-prd-path PATH] [--phase-1-spec-path PATH]
 ```
 
 A deterministic controller, not a judgment call -- it reads three persisted state fields plus two
@@ -130,11 +149,17 @@ dispatching `loopr-step10` anyway "to be safe": an unrecognised or incoherent st
 (`loopr-PRD.md` section 6 B6, PROJECT HARD BOUNDARY) and printing the state for a human to look at is
 the correct behaviour, not a gap to route around.
 
+`--modernized-prd-path` / `--phase-1-spec-path` (same override flags `customize --step 11/12` has):
+a mature repo can legitimately carry more than one valid phase-spec artifact permanently (this
+project's own repo does), and `dispatch`'s step10-artifact detection HALTs rather than guess which
+one applies. If it does, point it at the right file directly with these flags instead of moving or
+deleting the other one.
+
 | Exit | Name | What you do |
 |---|---|---|
 | `0` | `OK` | A subagent was named and the state was updated. Dispatch the printed `Task(...)` line. |
 | `50` | `COMPLETE` | `BUILD_COMPLETE.md` exists; nothing left to dispatch. |
-| `40` | `HALT` | The state is incoherent. Show the printed block to the user; do not dispatch anything, especially not `loopr-step10`. |
+| `40` | `HALT` | The state is incoherent, or step10's real artifacts are ambiguous on disk. Show the printed block to the user; if it's the artifact ambiguity, resolve with `--modernized-prd-path`/`--phase-1-spec-path`; otherwise do not dispatch anything, especially not `loopr-step10`. |
 | `2` | `USAGE` | `--remodernize` was given while a step was already in flight. |
 
 After the dispatched subagent finishes, record it:

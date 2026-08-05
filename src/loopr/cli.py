@@ -776,6 +776,12 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
     """`loopr dispatch`. Implements CUSTOMIZATION_PHASE_3_SPEC.md SS4.1: names which of the three
     already-generated subagents runs next. `dispatch/controller.py`'s `check_coherence()` runs first,
     always -- an incoherent state HALTs and dispatches nothing, never step10 "to be safe"."""
+    overrides = _resolve_step10_artifact_overrides(args)
+    if isinstance(overrides, str):
+        print(f"HALT: {overrides}", file=sys.stderr)
+        return exit_codes.HALT
+    prd_override, phase_1_spec_override = overrides
+
     store = StateStore(Path(args.state))
     state = store.load()
     repo_root = Path(state.repo_root)
@@ -793,7 +799,7 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         dispatch_state = apply_remodernize_reset(dispatch_state)
 
     try:
-        artifacts = find_step10_execution_artifacts(repo_root)
+        artifacts = find_step10_execution_artifacts(repo_root, prd_override, phase_1_spec_override)
     except Step10ArtifactAmbiguityError as exc:
         print(f"HALT: {exc}", file=sys.stderr)
         return exit_codes.HALT
@@ -970,6 +976,11 @@ def _build_parser() -> argparse.ArgumentParser:
     dispatch_p.add_argument("--json", action="store_true")
     dispatch_p.add_argument("--dry-run", action="store_true")
     dispatch_p.add_argument("--remodernize", action="store_true")
+    # Same override mechanism as `customize` (2026-08-04) -- dispatch calls the same
+    # find_step10_execution_artifacts gate and can hit the same standing ambiguity, with no other
+    # path for a human to resolve it (found live via this project's own first real dispatch run).
+    dispatch_p.add_argument("--modernized-prd-path", default=None)
+    dispatch_p.add_argument("--phase-1-spec-path", default=None)
     dispatch_p.set_defaults(func=cmd_dispatch)
 
     dispatch_complete_p = subparsers.add_parser("dispatch-complete")

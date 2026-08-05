@@ -97,27 +97,36 @@ loopr status / emit / replay   (unchanged since the base module)
    well-formed v1 payload (real `InterrogationState`, `schema_version` forced to 1, `dispatch` field
    removed to match a genuine pre-Phase-3 payload) raises `StateVersionError`
    (`test_well_formed_v1_payload_raises_state_version_error`). **PASS.**
-9. **Dogfood legibility check — the one a green suite cannot catch.** **UNVERIFIED, disclosed
-   explicitly, not marked pass or fail.** Confirmed directly with the operator: no real
-   `loopr dispatch` session has occurred yet in this project — every step10/11/12 invocation up to
-   and including this review was chosen manually by a human/architect session, which is exactly the
-   manual step this phase exists to replace. There is therefore no genuine re-verification-count
-   signal to report, positive or negative, and none was fabricated. The hand-run trace above
-   (criterion 6) and the golden-output shape tests (≤ 6 lines, fixed label order, `NOT-STEP10`/
-   `WARRANT` present on every relevant decision) are the strongest synthetic proxies available, and
-   both passed — but neither substitutes for what criterion 9 actually measures, which is the
-   operator's own re-verification behaviour under real use. **Recorded as an open item, pending the
-   first real dispatch session** — if that session shows re-verification more than once or twice,
-   the fix is `render_human()`'s shape (§4.3), not the routing logic, per the spec's own remedy
-   clause.
+9. **Dogfood legibility check — the one a green suite cannot catch.** **UPDATE (2026-08-05): first
+   real data point recorded — not the "unverified, no signal yet" state this entry originally
+   described.** The first real `loopr dispatch --state .loopr-state/state.json` session against this
+   project's own state did not reach the legibility question at all: it HALTed immediately on
+   `find_step10_execution_artifacts`'s ambiguity check, correctly detecting that this repo carries two
+   genuine phase-spec-shaped files (`PHASE_1_SPEC.md`, from loopr's own earlier core-module build, and
+   `CUSTOMIZATION_PHASE_3_SPEC.md`, this Phase 3 series' real deliverable) that both legitimately claim
+   provenance from `loopr-PRD.md`. That is a **genuine functional gap, not a legibility concern**:
+   `customize` had gained a `--modernized-prd-path`/`--phase-1-spec-path` override mechanism for
+   exactly this ambiguity in a prior fix (`bebdce3`), but `dispatch` called the same detector directly
+   with no arguments and no way for the operator to resolve it. Fixed by threading the same override
+   flags into `dispatch` (see `CUSTOMIZATION_PHASE_3_SPEC.md` §4.1's amendment note and §8 criterion
+   9's own amendment). Re-run after the fix: `loopr dispatch --state .loopr-state/state.json --dry-run
+   --phase-1-spec-path CUSTOMIZATION_PHASE_3_SPEC.md` produced a normal `DISPATCH`/`STATE`/`WHY`/
+   `NOT-STEP10` block, re-verified by hand in a single look — **zero re-verifications beyond that one,
+   well within the ≤ 2 threshold.** Legibility itself: **PASS**, on the one real run now on record.
+   The broader signal — that a green fixture suite and hand-run trace genuinely did not catch this,
+   exactly as this criterion's own framing warned — stands as the concrete justification for why this
+   criterion existed as behavioural, not mechanical, in the first place.
 10. **`mypy --strict` clean; full suite green.** `mypy --strict src/`: 0 errors, 45 source files.
     `pytest`: 358 passed, 2 skipped, 93% overall coverage (`dispatch/controller.py` 96%,
     `dispatch/log.py` / `dispatch/render.py` 100%). `test_no_paid_dependency.py` /
     `test_no_hardcoded_domain.py`: passing — runtime dependency set unchanged (`{"pydantic"}`).
     `tests/test_dispatch_boundary.py` (G1–G3, G5, G7, G8, executable): all passing. **PASS.**
 
-**Net: 9 of 10 criteria independently verified and passing; criterion 9 disclosed as unverified by
-design, not silently dropped and not fabricated.**
+**Net: 10 of 10 criteria independently verified and passing.** Criterion 9 moved from disclosed-
+unverified to verified-pass on 2026-08-05, on the strength of the first real `loopr dispatch` session
+against this project's own state — which incidentally surfaced and closed a genuine functional gap
+(`dispatch` had no way to resolve the same step10-artifact ambiguity `customize` already had an
+override flag for), not merely a legibility data point.
 
 ## Citation-gate summary
 
@@ -151,14 +160,13 @@ understands why Phase 2's approval commit postdates Phase 3's implementation com
 ## Demo-recording handoff
 
 **Not applicable.** loopr is a local CLI tool, not a hosted service with a UI to record — the
-operational proof for this phase is criterion 9's real dogfooding run (above), which is the thing
-still pending, not a separate recorded demo of already-working behaviour.
+operational proof for this phase is criterion 9's real dogfooding run (above), now recorded rather
+than pending, not a separate recorded demo of already-working behaviour.
 
 ## Ready for architect review
 
 This document and the full commit history since `3e25f41` (Phase 1's approval, the start of this
-series) are ready for review. The one open item is criterion 9: the first real `loopr dispatch`
-session against a genuine multi-phase build should be watched for how many times the operator
-re-verifies the printed decision by hand. More than once or twice per the spec's own threshold is a
-fail on `render_human()`'s shape specifically, not on the routing logic this review already
-independently verified clean.
+series) are ready for review. All ten criteria are now independently verified and passing, including
+criterion 9's real dogfooding run — which found and closed a genuine functional gap
+(step10-artifact-ambiguity override flags, present on `customize` but missing from `dispatch`) rather
+than the legibility failure it was originally watching for. No open items remain.

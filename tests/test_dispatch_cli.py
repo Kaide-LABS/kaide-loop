@@ -166,6 +166,92 @@ def test_remodernize_resets_round_and_verdict_and_dispatches_step10(
     assert reloaded.dispatch.last_step12_verdict is None
 
 
+# ============================================================================
+# 2026-08-05: `--modernized-prd-path` / `--phase-1-spec-path` threaded through `dispatch`, same
+# mechanism `customize` already had (bebdce3) -- found live via this project's own first real
+# `loopr dispatch` run, which HALTs on this exact ambiguity (two genuine phase-spec-shaped files at
+# repo root, both legitimately claiming provenance from the same PRD) with no flag to resolve it.
+# ============================================================================
+
+
+def _seed_colliding_step10_artifacts(repo: Path) -> None:
+    """Reproduces the exact ambiguity structurally: one modernised PRD, two *.md files that each
+    independently satisfy both of find_step10_execution_artifacts' Phase-N-spec signals (a real
+    'Phase Plan Header' heading line, and an explicit 'built from' claim naming the PRD)."""
+    (repo / "MODERNIZED_PRD.md").write_text("## MODERNIZATION CHANGELOG\n", encoding="utf-8")
+    (repo / "PHASE_1_SPEC.md").write_text(
+        "# Phase Plan Header\n\nBuilt from `MODERNIZED_PRD.md`.\n", encoding="utf-8"
+    )
+    (repo / "PHASE_2_SPEC.md").write_text(
+        "# Phase Plan Header\n\nBuilt from `MODERNIZED_PRD.md`.\n", encoding="utf-8"
+    )
+
+
+def test_dispatch_halts_on_colliding_step10_artifacts_without_override(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    state_path = _init_state(tmp_path, repo)
+    _seed_colliding_step10_artifacts(repo)
+
+    code = main(["dispatch", "--state", str(state_path), "--dry-run"])
+    err = capsys.readouterr().err
+
+    assert code == exit_codes.HALT
+    assert "HALT:" in err
+    assert "PHASE_1_SPEC.md" in err
+    assert "PHASE_2_SPEC.md" in err
+    assert "--phase-1-spec-path" in err
+
+
+def test_dispatch_phase_1_spec_path_override_resolves_the_collision(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    state_path = _init_state(tmp_path, repo)
+    _seed_colliding_step10_artifacts(repo)
+
+    code = main(
+        [
+            "dispatch",
+            "--state",
+            str(state_path),
+            "--dry-run",
+            "--phase-1-spec-path",
+            str(repo / "PHASE_2_SPEC.md"),
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert code == exit_codes.OK
+    assert "DISPATCH" in out
+    assert "STATE" in out
+    assert "WHY" in out
+    assert "NOT-STEP10" in out
+
+
+def test_dispatch_override_path_that_does_not_exist_errors_clearly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    state_path = _init_state(tmp_path, repo)
+
+    code = main(
+        [
+            "dispatch",
+            "--state",
+            str(state_path),
+            "--dry-run",
+            "--phase-1-spec-path",
+            str(repo / "does-not-exist.md"),
+        ]
+    )
+    err = capsys.readouterr().err
+
+    assert code == exit_codes.HALT
+    assert "does not exist or is not a file" in err
+
+
 def test_dispatch_complete_usage_error_when_nothing_in_flight(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo = tmp_path / "repo"
     state_path = _init_state(tmp_path, repo)
