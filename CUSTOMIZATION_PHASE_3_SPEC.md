@@ -320,7 +320,7 @@ failure (`loopr-MIGRATION.md` §7).
 
 ```
 loopr dispatch --state <state.json> [--json] [--dry-run] [--remodernize]
-                [--modernized-prd-path PATH] [--phase-1-spec-path PATH]
+                [--modernized-prd-path PATH] [--phase-1-spec-path PATH] [--build-complete-path PATH]
 ```
 
 | Flag | Meaning |
@@ -330,6 +330,7 @@ loopr dispatch --state <state.json> [--json] [--dry-run] [--remodernize]
 | `--dry-run` | decide and print; **do not** mutate state, **do not** append to the log |
 | `--remodernize` | the operator act that makes `EXPLICIT_REMODERNIZATION` reachable (§4.2) |
 | `--modernized-prd-path` / `--phase-1-spec-path` | **added 2026-08-05**, amendment, see below |
+| `--build-complete-path` | **added 2026-08-05**, second amendment from the same dogfood run, see §6.2 |
 
 **Amendment (2026-08-05): step10-artifact override flags, threaded through from `customize`.** The
 first real `loopr dispatch` run against this project's own state (`.loopr-state/state.json`) HALTed
@@ -496,7 +497,23 @@ zero confidence scores.** Match order is significant and is the order below.
 
 | # | State ID | Precondition | → Target | Warrant / declined-because |
 |---|---|---|---|---|
-| 1 | `S0_TERMINAL` | `BUILD_COMPLETE.md` exists | *(none)* — exit `COMPLETE` | declined: build is complete |
+| 1 | `S0_TERMINAL` | `build_complete_present` (CLI-resolved, see amendment below) | *(none)* — exit `COMPLETE` | declined: build is complete |
+
+**Amendment (2026-08-05): the CLI-side resolution of `build_complete_present`, not `decide()` itself,
+changed.** `decide()`'s signature is unchanged — it still takes a bare `build_complete_present: bool`
+(G5's guard: no new input without a human decision, and this isn't one). What changed is how
+`cli.py::cmd_dispatch` computes that bool: the second finding from this project's own first real
+`loopr dispatch` run — from the *same* call as the artifact-override finding above — was that
+`build_complete_present` was hardcoded to `(repo_root / "BUILD_COMPLETE.md").exists()`, unrelated to
+the project the given `--state` file actually tracks. This repo hosts two loopr-managed builds
+(`BUILD_COMPLETE.md` for the base module, `CUSTOMIZATION_BUILD_COMPLETE.md` for this series, per the
+latter's own "Note on naming"), and the hardcoded check happened to read the *other* project's marker
+and get the right answer by coincidence — not by verification. The dangerous direction (this series
+mid-build while the unrelated `BUILD_COMPLETE.md` still sits at repo root) was never exercised because
+both builds happened to be done simultaneously. Fixed with a `--build-complete-path` override flag,
+same shape as `--modernized-prd-path`/`--phase-1-spec-path`, defaulting to the exact prior behaviour
+when omitted. This was a **silent, coincidentally-correct pass**, not a HALT — more concerning in kind
+than the first finding, which at least refused loudly.
 | 2 | `S2_STEP10_IN_FLIGHT` | `active_step == STEP_10` | `loopr-step10` | `GREENFIELD_NO_ARTIFACTS` if artifacts absent, else `EXPLICIT_REMODERNIZATION` |
 | 3 | `S1_PRE_STEP10` | artifacts absent (⇒ `active_step is None`, by C3) | `loopr-step10` | `GREENFIELD_NO_ARTIFACTS` |
 | 4 | `S4_STEP11_IN_FLIGHT` | `active_step == STEP_11` | `loopr-step11` | declined: artifacts present, no `--remodernize` |

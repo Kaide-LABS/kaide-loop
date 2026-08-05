@@ -136,7 +136,7 @@ customized subagent actually runs next.
 
 ```
 loopr dispatch --state <target>/.loopr-state/state.json [--json] [--dry-run] [--remodernize]
-                [--modernized-prd-path PATH] [--phase-1-spec-path PATH]
+                [--modernized-prd-path PATH] [--phase-1-spec-path PATH] [--build-complete-path PATH]
 ```
 
 A deterministic controller, not a judgment call -- it reads three persisted state fields plus two
@@ -154,6 +154,14 @@ a mature repo can legitimately carry more than one valid phase-spec artifact per
 project's own repo does), and `dispatch`'s step10-artifact detection HALTs rather than guess which
 one applies. If it does, point it at the right file directly with these flags instead of moving or
 deleting the other one.
+
+`--build-complete-path`: a repo can also host more than one loopr-managed build, each with its own
+completion marker (this repo does: `BUILD_COMPLETE.md` for the base module,
+`CUSTOMIZATION_BUILD_COMPLETE.md` for this series) -- `dispatch` otherwise checks the hardcoded
+`BUILD_COMPLETE.md`, which may belong to a different project than the one `--state` tracks. Point
+this at the marker your `--state` file's project actually uses; unlike the two flags above, a path
+that does not exist yet is a normal answer here (the project is simply still mid-build), not an
+error.
 
 | Exit | Name | What you do |
 |---|---|---|

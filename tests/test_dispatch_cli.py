@@ -252,6 +252,116 @@ def test_dispatch_override_path_that_does_not_exist_errors_clearly(
     assert "does not exist or is not a file" in err
 
 
+# ============================================================================
+# 2026-08-05: `--build-complete-path`, second gap from the same first real dispatch dogfood run.
+# cli.py hardcoded `(repo_root / "BUILD_COMPLETE.md").exists()` -- unrelated to the project the
+# given --state file actually tracks. A repo can host more than one loopr-managed build with its own
+# completion marker (this repo does); the dangerous direction is a project genuinely mid-build being
+# falsely reported S0_TERMINAL because an unrelated marker for a DIFFERENT build sits at repo root.
+# ============================================================================
+
+
+def test_dispatch_does_not_falsely_report_terminal_from_an_unrelated_build_complete_marker(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The dangerous direction, reproduced directly: an unrelated BUILD_COMPLETE.md (simulating a
+    different loopr-managed build in the same repo) sits at repo root, while THIS project's own
+    marker (pointed at via --build-complete-path) does not exist yet -- genuinely mid-build. Must NOT
+    report S0_TERMINAL; must fall through to the normal state-based decision instead."""
+    repo = tmp_path / "repo"
+    state_path = _init_state(tmp_path, repo)
+    (repo / "BUILD_COMPLETE.md").write_text("unrelated build, done", encoding="utf-8")
+    # Deliberately NOT creating repo / "MY_BUILD_COMPLETE.md" -- this project's own build is not done.
+
+    code = main(
+        [
+            "dispatch",
+            "--state",
+            str(state_path),
+            "--dry-run",
+            "--build-complete-path",
+            str(repo / "MY_BUILD_COMPLETE.md"),
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert code != exit_codes.COMPLETE
+    assert "s0_terminal" not in out
+    assert "-- nothing; build is complete" not in out
+    assert "loopr-step10" in out  # falls through to the normal greenfield decision
+
+
+def test_dispatch_reports_terminal_when_override_marker_exists(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    state_path = _init_state(tmp_path, repo)
+    (repo / "MY_BUILD_COMPLETE.md").write_text("this project's own build, done", encoding="utf-8")
+
+    code = main(
+        [
+            "dispatch",
+            "--state",
+            str(state_path),
+            "--dry-run",
+            "--build-complete-path",
+            str(repo / "MY_BUILD_COMPLETE.md"),
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert code == exit_codes.COMPLETE
+    assert "s0_terminal" in out
+    assert "MY_BUILD_COMPLETE.md exists at the target repository root" in out
+    assert "BUILD_COMPLETE.md exists" not in out.replace("MY_BUILD_COMPLETE.md exists", "")
+
+
+def test_dispatch_omitting_build_complete_path_reproduces_default_behavior_unchanged(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No flag given -- criterion 4/6's existing single-build-per-repo behaviour must stay byte-for-
+    byte unchanged: the default filename, the default WHY text."""
+    repo = tmp_path / "repo"
+    state_path = _init_state(tmp_path, repo)
+    (repo / "BUILD_COMPLETE.md").write_text("done", encoding="utf-8")
+
+    code = main(["dispatch", "--state", str(state_path), "--dry-run"])
+    out = capsys.readouterr().out
+
+    assert code == exit_codes.COMPLETE
+    assert "s0_terminal" in out
+    assert "BUILD_COMPLETE.md exists at the target repository root; the build is complete." in out
+
+
+def test_dispatch_build_complete_override_path_that_is_a_directory_errors_clearly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Unlike --modernized-prd-path/--phase-1-spec-path, a --build-complete-path that does not exist
+    yet is NOT an error (see test_dispatch_does_not_falsely_report_terminal_from_an_unrelated_
+    build_complete_marker -- that's the normal "still mid-build" case this flag exists to express).
+    It is only rejected if it exists but is unambiguously not a plausible marker file, e.g. a
+    directory."""
+    repo = tmp_path / "repo"
+    state_path = _init_state(tmp_path, repo)
+    (repo / "a-directory").mkdir()
+
+    code = main(
+        [
+            "dispatch",
+            "--state",
+            str(state_path),
+            "--dry-run",
+            "--build-complete-path",
+            str(repo / "a-directory"),
+        ]
+    )
+    err = capsys.readouterr().err
+
+    assert code == exit_codes.HALT
+    assert "exists but is not a file" in err
+    assert "--build-complete-path" in err
+
+
 def test_dispatch_complete_usage_error_when_nothing_in_flight(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo = tmp_path / "repo"
     state_path = _init_state(tmp_path, repo)

@@ -116,6 +116,29 @@ loopr status / emit / replay   (unchanged since the base module)
    The broader signal — that a green fixture suite and hand-run trace genuinely did not catch this,
    exactly as this criterion's own framing warned — stands as the concrete justification for why this
    criterion existed as behavioural, not mechanical, in the first place.
+
+   **Second amendment (2026-08-05, same dogfood session): a second, independent finding, more
+   concerning in kind.** Re-running the exact acceptance check from the first amendment
+   (`--phase-1-spec-path CUSTOMIZATION_PHASE_3_SPEC.md`, no `--build-complete-path`) did not HALT —
+   it printed `s0_terminal`, "the build is complete," exit `50`. Correct verdict, wrong reason: `WHY`
+   named `BUILD_COMPLETE.md` — the *base module's* unrelated, permanent completion marker, not this
+   customization series' own `CUSTOMIZATION_BUILD_COMPLETE.md`. `cli.py` had hardcoded
+   `(repo_root / "BUILD_COMPLETE.md").exists()`, with no relationship to the project the given
+   `--state` file actually tracks. Where the first finding was a **loud refusal** (a HALT, impossible
+   to miss), this one was a **silent, coincidentally-correct pass** — the dangerous direction (this
+   series genuinely mid-build while the base module's unrelated marker still sat at repo root, which
+   it does right now) was never exercised because both builds happened to finish at the same time.
+   Nothing short of running the real command against the real repo state surfaced it; no fixture or
+   unit test had reason to, since none modeled two completion markers coexisting. Fixed with a
+   `--build-complete-path` override flag (default behaviour unchanged when omitted — criterion 4/6's
+   existing fixtures and trace stay green untouched) and `render_human()`'s `WHY` line now naming
+   whichever marker actually fired. Re-run with both flags:
+   `loopr dispatch --state .loopr-state/state.json --dry-run --phase-1-spec-path
+   CUSTOMIZATION_PHASE_3_SPEC.md --build-complete-path CUSTOMIZATION_BUILD_COMPLETE.md` — still
+   `s0_terminal`, exit `50`, but `WHY` now correctly names `CUSTOMIZATION_BUILD_COMPLETE.md`.
+   Legibility status unchanged (**PASS**, one re-verification), but the underlying fact this criterion
+   was watching for — a green suite plus one real run genuinely surfacing something nothing else
+   caught — now has two independent data points from a single dogfood session, not one.
 10. **`mypy --strict` clean; full suite green.** `mypy --strict src/`: 0 errors, 45 source files.
     `pytest`: 358 passed, 2 skipped, 93% overall coverage (`dispatch/controller.py` 96%,
     `dispatch/log.py` / `dispatch/render.py` 100%). `test_no_paid_dependency.py` /

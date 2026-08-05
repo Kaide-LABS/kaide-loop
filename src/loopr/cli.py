@@ -339,27 +339,52 @@ def cmd_customize(args: argparse.Namespace) -> int:
     return _cmd_customize_step12(args)
 
 
+def _resolve_override_path(raw: str | None, flag_name: str) -> Path | None | str:
+    """Shared single-flag validation for --modernized-prd-path / --phase-1-spec-path (`customize`,
+    `dispatch`): a supplied path must exist and be a file, or a clear error string is returned to
+    print-and-HALT on -- never a raw stack trace, never a silent fallback to the default as though
+    the flag hadn't been given. Returns None if `raw` is falsy (the flag was omitted). NOT used for
+    --build-complete-path -- see _resolve_build_complete_override, which has different, deliberately
+    weaker validation for a real semantic reason."""
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if not candidate.is_file():
+        return f"{flag_name} {raw!r} does not exist or is not a file"
+    return candidate
+
+
+def _resolve_build_complete_override(raw: str | None) -> Path | None | str:
+    """--build-complete-path is NOT validated like the two step10-artifact overrides above: those
+    substitute in real content the tool needs to read, so a missing path is always a mistake. This
+    flag instead names WHICH marker file to check for existence -- and "does not exist yet" is the
+    normal, expected, load-bearing answer for a project that is genuinely still mid-build (the exact
+    case this flag exists to make expressible; see CUSTOMIZATION_PHASE_3_SPEC.md SS4.1's amendment).
+    Requiring existence up front would make that case impossible to express at all. Only rejected if
+    the path exists but is not a plain file (e.g. a directory) -- a genuine, unambiguous misuse, not
+    a normal "not complete yet" state. Returns None if `raw` is falsy (the flag was omitted)."""
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if candidate.exists() and not candidate.is_file():
+        return f"--build-complete-path {raw!r} exists but is not a file"
+    return candidate
+
+
 def _resolve_step10_artifact_overrides(
     args: argparse.Namespace,
 ) -> tuple[Path | None, Path | None] | str:
-    """Validates and resolves --modernized-prd-path / --phase-1-spec-path (step11/step12 only) into
-    Path overrides for find_step10_execution_artifacts. Returns (prd_override, phase_1_spec_override)
-    -- either or both may be None -- on success, or an error message string to print and HALT on if a
-    supplied path does not exist or is not a file. Never a raw stack trace, never a silent fallback to
-    auto-detection as though the flag hadn't been given."""
-    prd_override: Path | None = None
-    if args.modernized_prd_path:
-        candidate = Path(args.modernized_prd_path)
-        if not candidate.is_file():
-            return f"--modernized-prd-path {args.modernized_prd_path!r} does not exist or is not a file"
-        prd_override = candidate
+    """Validates and resolves --modernized-prd-path / --phase-1-spec-path (step11/step12/dispatch)
+    into Path overrides for find_step10_execution_artifacts. Returns (prd_override,
+    phase_1_spec_override) -- either or both may be None -- on success, or an error message string to
+    print and HALT on if a supplied path does not exist or is not a file."""
+    prd_override = _resolve_override_path(args.modernized_prd_path, "--modernized-prd-path")
+    if isinstance(prd_override, str):
+        return prd_override
 
-    phase_1_spec_override: Path | None = None
-    if args.phase_1_spec_path:
-        candidate = Path(args.phase_1_spec_path)
-        if not candidate.is_file():
-            return f"--phase-1-spec-path {args.phase_1_spec_path!r} does not exist or is not a file"
-        phase_1_spec_override = candidate
+    phase_1_spec_override = _resolve_override_path(args.phase_1_spec_path, "--phase-1-spec-path")
+    if isinstance(phase_1_spec_override, str):
+        return phase_1_spec_override
 
     return prd_override, phase_1_spec_override
 
@@ -782,6 +807,11 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         return exit_codes.HALT
     prd_override, phase_1_spec_override = overrides
 
+    build_complete_override = _resolve_build_complete_override(args.build_complete_path)
+    if isinstance(build_complete_override, str):
+        print(f"HALT: {build_complete_override}", file=sys.stderr)
+        return exit_codes.HALT
+
     store = StateStore(Path(args.state))
     state = store.load()
     repo_root = Path(state.repo_root)
@@ -804,7 +834,13 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         print(f"HALT: {exc}", file=sys.stderr)
         return exit_codes.HALT
     artifacts_present = artifacts is not None
-    build_complete_present = (repo_root / "BUILD_COMPLETE.md").exists()
+    if build_complete_override is not None:
+        build_complete_path = build_complete_override
+        build_complete_marker_name = build_complete_override.name
+    else:
+        build_complete_path = repo_root / "BUILD_COMPLETE.md"
+        build_complete_marker_name = "BUILD_COMPLETE.md"
+    build_complete_present = build_complete_path.exists()
 
     coherence_failure = check_coherence(dispatch_state, artifacts_present)
     if coherence_failure is not None:
@@ -812,6 +848,15 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         return exit_codes.HALT
 
     decision = decide(dispatch_state, artifacts_present, build_complete_present)
+    if decision.state_id == DispatchStateId.S0_TERMINAL:
+        # decide()'s signature stays a bare bool (G5) -- it has no way to know WHICH path was
+        # checked, only whether it existed. The CLI layer, which does know, overwrites the reason
+        # here so the WHY line stays honest about which marker actually fired once more than one
+        # marker name is in play (2026-08-05).
+        decision.reason = (
+            f"{build_complete_marker_name} exists at the target repository root; the build is "
+            "complete."
+        )
     print(render_json(decision) if args.json else render_human(decision))
 
     terminal = decision.state_id == DispatchStateId.S0_TERMINAL
@@ -981,6 +1026,12 @@ def _build_parser() -> argparse.ArgumentParser:
     # path for a human to resolve it (found live via this project's own first real dispatch run).
     dispatch_p.add_argument("--modernized-prd-path", default=None)
     dispatch_p.add_argument("--phase-1-spec-path", default=None)
+    # A repo can host more than one loopr-managed build with its own completion marker (this repo
+    # does: BUILD_COMPLETE.md for the base module, CUSTOMIZATION_BUILD_COMPLETE.md for this series)
+    # -- --state tracks one specific project, so the S0_TERMINAL check must be scoped to that
+    # project's own marker, not a hardcoded repo-root filename that happens to belong to a different
+    # build (2026-08-05, found live via this project's own first real dispatch run).
+    dispatch_p.add_argument("--build-complete-path", default=None)
     dispatch_p.set_defaults(func=cmd_dispatch)
 
     dispatch_complete_p = subparsers.add_parser("dispatch-complete")
