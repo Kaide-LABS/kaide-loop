@@ -686,6 +686,11 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
    invariants (git-marker phase discovery, gates re-run as ground truth, the audit tier as a standing
    loop stage rather than an on-demand escalation) remain entirely unbuilt and parked; the driver
    automates plumbing between already-existing pieces, it does not add any of them.
+6. **Primary/secondary work is now an explicit operating rule, not just archetype-doc theory
+   (2026-08-06).** Full rule in `.claude/skills/loopr/SKILL.md`'s "Primary vs secondary work" section
+   (not restated here — this pointer is deliberately short, per the same operator instruction that
+   produced it: less PRD ceremony per change going forward, full disclosure reserved for what this
+   document is actually for).
 
 Prove 1 before touching 2-4. This replaces an earlier version of this section that assumed skill
 packaging and the Docker-ported loop were the near-term path; both were superseded by the sequencing

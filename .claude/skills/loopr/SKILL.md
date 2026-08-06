@@ -20,11 +20,41 @@ never have this triggered on them.
 Invoking this skill makes this session the **architect** for whatever it's about to work on: it
 produces specs, directives, and reviews (via the interrogation loop below), and independently
 verifies what comes back. It does **not** write the target project's own application code directly
--- that happens in a separate executor session or subagent, dispatched via a directive or via
-`loopr dispatch`'s customized subagents (step 5 below). This is an operator convention this skill
-documents for the session's own orientation, not something the module's code enforces or knows
-about -- `src/loopr/` never branches on session identity or role, and nothing in this convention
-should ever be threaded into a judge call's inputs.
+-- that happens via a dispatched subagent (the Agent tool's `Task(...)`), never a separate manual
+session/tab. This is an operator convention this skill documents for the session's own orientation,
+not something the module's code enforces or knows about -- `src/loopr/` never branches on session
+identity or role, and nothing in this convention should ever be threaded into a judge call's inputs.
+**[AMENDED 2026-08-06]** Earlier guidance here named "a separate executor session" as the default
+handoff -- superseded now that native subagent dispatch is available in-session: draft the directive,
+then dispatch it directly via `Task(...)`, don't print it for the operator to relay by hand.
+
+### Primary vs secondary work
+
+Every request this session takes on is one or the other -- classify it yourself, it is a judgment
+call, not a mechanical rule (`docs/loopr-v2-agent-archetypes.md`'s own two-orchestration-mode split,
+made concrete here):
+
+- **Primary** -- a new feature or a change significant enough that scope, boundary, or an existing
+  convention genuinely needs confirming. Run it through the full interrogation loop below (step 2),
+  confirm the real gates with the operator, then hand the confirmed build to the phased step10/11/12
+  loop (dispatched by hand per step 5, or automated per step 7's driver, once customized).
+- **Secondary** -- a directive-shaped fix, small enough that the scope is already clear from the
+  request itself (a bug found and diagnosed, a small correction, a follow-up). Draft the directive,
+  then **dispatch it directly to a subagent via `Task(...)` -- do not stop to ask the operator "how do
+  you want to handle this" first.** The operator has said, explicitly, that this back-and-forth is
+  friction they want removed by default. Independently re-verify the subagent's result afterward (the
+  standard applies unchanged) -- this rule removes the *pre*-dispatch confirmation step, not the
+  post-dispatch verification discipline.
+  - If a secondary task needs more than one directive in a row (a debug trail where directive 3
+    depends on what directive 1 surfaced), **continue the same subagent via `SendMessage` to its
+    agent ID rather than spawning a fresh one each time** -- this is what makes secondary mode's
+    original "one long-lived executor" design (`docs/loopr-v2-agent-archetypes.md`) work without a
+    manual copy-paste tab: cumulative context lives in the continued subagent, not in the operator's
+    clipboard.
+  - This does not override the "Executing actions with care" judgment in the system prompt --
+    destructive, hard-to-reverse, or genuinely ambiguous actions still warrant a real check-in
+    regardless of primary/secondary classification. The rule removes reflexive
+    permission-seeking for ordinary directive-shaped work, not judgment about real risk.
 
 Before Preflight: check whether the target project has its own root-level orientation file (commonly
 `ARCHITECT.md`, but the project may name it differently -- look for one before assuming there isn't
