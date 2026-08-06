@@ -507,6 +507,28 @@ Design notes grounded in the skill spec:
 - **Deliberate invocation.** loopr is user-invocable (`/loopr`) and deliberately started, not auto-triggered on any coding request, so it never hijacks a user who just wanted a quick edit.
 - **Scripts run out-of-context.** Any bundled helper script executes via bash; its code never enters the context window, only its output.
 
+**Architect-session bootstrapping (2026-08-05).** `SKILL.md`'s own "Session role" section (added
+alongside the dispatch controller) makes invoking `/loopr` in a project self-declaring: the session
+becomes that project's architect, and — before Preflight — checks the target project's root for its
+own orientation file (this repo's is `ARCHITECT.md`; a project may name it differently) and reads it
+if present. This deliberately replaced an earlier, rejected design: a standalone
+`.claude/commands/architect.md` slash command paired with a separate `ARCHITECT.md`. That design
+required a second install step per project (drop the command file, remember to invoke `/architect`
+before `/loopr`) and duplicated the role definition in two places that could drift apart. Folding it
+into the skill itself means one install (the skill) carries both capabilities, and there is exactly
+one place the role definition lives.
+
+**What this means for a future setup script:** installing loopr into a new project is still just
+`.claude/skills/loopr/` (this section's own file tree) — no separate command file to place.
+Per-project orientation content (an `ARCHITECT.md`-shaped file: where to find that project's own
+status/completion markers, that project's own hard constraints) is optional, project-specific, and
+NOT something the setup script should template or auto-generate from a boilerplate — the whole point
+is real, current pointers into that specific project's real state, and a generated placeholder would
+either be empty (useless) or stale the moment it's written (worse than absent, per the same
+independent-verification discipline this build applies everywhere else). The setup script's job
+here is narrow: install the skill, and tell the user in its own output that an optional
+`ARCHITECT.md` they write themselves will be picked up automatically once one exists.
+
 ## 10. Failure-mode catalogue (loopr's own; dogfooding Step 0)
 
 The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the build have a map:
@@ -601,6 +623,15 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
   secondary orchestration modes, reviewer context isolation, two-layer scratch-file state, executor
   retirement triggers. Filed 2026-08-03 as a forward spec: `docs/loopr-v2-agent-archetypes.md`.
   V1 ships first, unchanged; this is the next major arc after V1 is complete.
+  **Disclosed deviation (2026-08-06): the AUDITOR archetype specifically (the 2026-08-03 Step 12.5
+  extension to the same doc) is being pulled forward and built now, ahead of the rest of V2 and ahead
+  of section 13's own "V1 complete" bar** ("the three acceptance criteria in section 3 reproducibly
+  hit on strangers' greenfield problems" -- not yet true; the customization/dispatch dogfooding done
+  on 2026-08-05/06 proved the layer on kaide-loop itself, which is self-use, not the stranger's-project
+  bar this section sets). This is a deliberate operator call, made explicit rather than silently
+  reordered: the rest of the archetype layer (EXECUTOR/REVIEWER roles, orchestration modes, scratch-file
+  state) stays deferred exactly as below; only the AUDITOR subagent is in scope, built via a real
+  `/loopr` interrogation rather than skipping straight to code.
 - The web-to-Code auto-relay (author's personal workflow; a stranger does everything in Claude Code).
 - Docker (native subagents replace it; the fresh-context-per-phase property loopr wanted is native to subagents).
 - Codex / Cursor ports.
@@ -645,6 +676,76 @@ decision recorded in `loopr-MIGRATION.md`.
 ## 15. Open decisions (honest, refreshed 2026-07-27)
 
 **Genuinely open right now, blocking nothing but worth tracking:**
+- **`loopr emit`'s output path silently collides across concurrently-tracked builds sharing one
+  `repo_root` (found 2026-08-06, during the AUDITOR build's own interrogation).** `emit` writes to
+  `<repo_root>/.claude/loopr/` by default; `--out` exists but nothing warns or refuses when the
+  default path is about to overwrite artifacts belonging to a *different* confirmed
+  `problem_statement` than the one in the `--state` file being emitted. This is the same collision
+  class as the two `loopr dispatch` fixes shipped 4703148/c65a0d2 the same day, for the same root
+  cause (kaide-loop hosts more than one loopr-managed build in one repo), just on `emit` instead of
+  `dispatch`. Concretely: running `loopr emit` for the AUDITOR subagent's own interrogation
+  overwrote the already-shipped LOOPR-CUSTOMIZATION project's `baby_prd.md`/`context.md`/
+  `conformance-ledger.md` before being caught and restored (re-emitted from the untouched
+  `.loopr-state/state.json`, which is a lossless recovery since `emit` is a pure render of state —
+  but a repo without that safety net would not have recovered cleanly). Not fixed yet; recorded here
+  rather than silently worked around.
+  **[FIXED 2026-08-06]** `cmd_emit` (`cli.py`) now resolves `state_path = Path(args.state).resolve()`
+  and, before writing, checks for a sidecar marker at `out_dir / ".emitted_from.json"` — not a new
+  `InterrogationState` field, per the same "don't grow persisted state for a derivable fact"
+  discipline `dispatch` already follows. No marker (first-ever emit into a directory, which covers
+  everything already on disk before this fix) or a marker whose recorded `state_path` matches the
+  current one (the normal re-emit-after-gate-revision case) both proceed as before and (re)write the
+  marker on success. A marker whose recorded `state_path` differs refuses outright: prints both state
+  paths and both (truncated) `problem_statement`s to stderr, suggests `--out <dir>`, returns
+  `exit_codes.HALT`, and writes nothing — same refusal shape as the six-conditions check three lines
+  above it in the same function. Applies to both the default and an explicit `--out`, since the root
+  cause is two state files targeting one directory, not the default path specifically. Covered by
+  `tests/test_emit_collision.py` (four cases: cross-project collision refused with a byte-for-byte
+  before/after check that nothing was overwritten, same-state re-emit still succeeds, a fresh
+  never-emitted-into directory still succeeds, and the guard applies under the default out_dir too)
+  and re-verified live against this repo: two throwaway `--state` files emitted to one shared
+  `--out` directory, second call HALTs instead of overwriting the first.
+- **Pre-existing drift discovered during the same incident, not caused by it.** The on-disk
+  `.claude/loopr/baby_prd.md`/`context.md` (before the overwrite above) described
+  `CUSTOMIZATION_PHASE_3_SPEC.md`'s own scope specifically (a "when Phase 3 is done..." TL;DR,
+  phase-3-specific soft context), but `.loopr-state/state.json`'s `problem_statement` field (round 5)
+  has read "Automate the spec-driven loop I currently run manually via the step 10, 11, and 12
+  prompts" for the entirety of this session, unmodified by anything done in it. The two didn't match
+  *before* today's incident. **[RESOLVED 2026-08-06, FAIL — real bug, not benign]** Investigated by
+  `loopr-step12` as a live functional test of its new PER-ITEM VERDICT TRACKING section (below):
+  `cmd_emit` (`cli.py`) renders the TL;DR purely from `state.problem_statement`, which never changed
+  for this state file (confirmed across every `judge_log` entry and the top-level field); the only
+  revision channel, `GateResponse.problem_statement_revision` (`gates.py`), was never populated for
+  round 5 — Gate 1's confirmation used the plain `amendment` field instead, which `gates.py` never
+  routes into `state.problem_statement` (`gate_1_baby_prd`'s own recorded `user_amendment` already
+  says as much: "Gate 1 has no mechanism to actually apply this correction to state"). Since this
+  state file was therefore never the source of the Phase-3-scoped text, the on-disk artifacts must
+  have last been written by a *different*, concurrently-tracked `--state` file's `loopr emit` call
+  targeting the same unguarded default output directory — i.e. this is a second, **earlier**
+  occurrence of the exact `emit`-collision bug named in the bullet directly above, not an independent
+  mystery. Confidence 0.85 (not higher): the *other* colliding state file itself was not directly
+  inspected — it is not identified by name/path anywhere on record — so the collision is inferred
+  from the only mechanism in the codebase capable of producing that output, not observed by diffing
+  the two states directly.
+- **`loopr-step12`'s new PER-ITEM VERDICT TRACKING section (added 2026-08-06) — first real dogfood
+  results.** Four live tests, not hypothetical: two real, previously-open questions (the drift above,
+  and whether an UNCERTAIN item blocks PHASE APPROVAL) both resolved confidently (FAIL and PASS
+  respectively) rather than hedging into UNCERTAIN — real evidence the anti-hedging guard holds under
+  pressure, including a deliberately constructed ambiguous synthetic snippet that also resolved
+  confidently (CONFIRMED violation, via a reachability argument, not lexical containment). Only a
+  fourth test — evidence deliberately withheld (a commit message with no diff) rather than a merely
+  hard question — produced a genuine `UNCERTAIN`, which was then dispatched end-to-end to
+  `loopr-auditor` and logged to `.loopr-state/auditor-log.jsonl` (diffed before/after, 1 line → 2).
+  The auditor independently re-verified against the real current code (not step12's framing),
+  confirmed no such commit exists in git history, ruled `FALSE_ALARM` on the code while explicitly
+  endorsing step12's refusal-to-certify as methodologically correct. **One real, disclosed gap
+  found in the process, fixed same day:** step12 supplied the confidence field as the qualitative
+  label `"high"` rather than the numeric `0.0–1.0` score its own section specifies — a real format
+  deviation, caught independently by both step12 (self-disclosed) and the auditor (flagged as
+  material, not cosmetic). Fixed by tightening `loopr-step12.md`'s CONFIDENCE field instructions in
+  both the detailed bullet and the HANDOFF FORMAT template (explicit "literal decimal number, never a
+  qualitative word" language, with examples). Re-verified live against the identical withheld-evidence
+  scenario: step12 produced `CONFIDENCE 0.1`, a real parseable number.
 - Interrogation question-generation/grouping logic — not yet specified.
 - The `context.md`-vs-baby-PRD split classifier — not yet specified.
 - ~~Standalone module's exact interface/CLI surface — not yet specified.~~ **[RESOLVED 2026-07-28]**

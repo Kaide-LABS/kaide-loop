@@ -107,6 +107,17 @@ loopr emit --state <target>/.loopr-state/state.json
 Renders `baby_prd.md`, `context.md`, and (brownfield) `conformance-ledger.md` to
 `<target>/.claude/loopr/`. Refuses unless all six conditions genuinely pass -- never emit early.
 
+**Cross-project collision guard.** A repo can host more than one concurrently-tracked
+`--state` file writing to the same output directory by design (this repo does). `emit` refuses
+instead of silently overwriting: it writes a sidecar marker, `.emitted_from.json`, into the output
+directory alongside the rendered artifacts, recording which `--state` file's (resolved) path last
+emitted there. The next `emit` into that directory checks the marker first -- same `--state` path
+(the normal case: re-emitting after a gate got revised) proceeds and refreshes the marker; no
+marker yet (first-ever emit into that directory) proceeds and writes one; a *different* `--state`
+path refuses outright with `HALT`, printing both state paths and both problem statements to
+stderr and pointing at `--out <dir>` to target somewhere else. If you see that refusal, do not
+retry the same command -- pick a distinct `--out` directory per project instead.
+
 ### 4. Customize step 10, step 11, step 12 (optional, once COMPLETE)
 
 ```
@@ -181,6 +192,48 @@ default it; a defaulted verdict fabricates a review outcome that did not happen.
 exist for auditing, not for the normal loop: `loopr dispatch-verify --fixtures <dir>` re-runs the
 fixture suite as a single pass/fail command, and `loopr dispatch-audit --log <path>` greps the
 append-only dispatch log for every `loopr-step10` call and fails if any lacks a real warrant.
+
+### 6. Escalate to the AUDITOR (optional, once step12 has flagged something)
+
+Not part of `loopr dispatch`'s routing table -- `decide()` stays a deterministic, zero-LLM state
+machine with exactly three targets (`loopr-step10`/`loopr-step11`/`loopr-step12`); the auditor is
+never a fourth thing it can name. This is a separate, architect-initiated act, only ever taken after
+`loopr-step12` has already run and flagged a specific item as `UNCERTAIN` (confidence below
+threshold) or as touching a correctness-critical path regardless of confidence.
+
+**You (the architect), not step12, decide to dispatch.** Never let step12 self-escalate -- a
+confidently-wrong reviewer will not recognise it needs help, which is exactly when help is needed.
+Extract the one flagged item's spec clause, file/line reference, and step12's written reason (never
+just its confidence number), and dispatch `Task(subagent_type="loopr-auditor")` with exactly that --
+never the full diff, never the rest of the review.
+
+When the auditor returns its `VERDICT`/`REASON`/`GUIDANCE` block, append it to this project's
+escalation log before relaying anything back to step12 -- the log is what makes the escalation a
+real audit trail instead of an off-the-record exchange between subagents:
+
+```python
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+
+entry = {
+    "ts": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "item": "<the flagged item's spec clause / file:line>",
+    "verdict": "<CONFIRMED_VIOLATION | FALSE_ALARM | GENUINELY_AMBIGUOUS>",
+    "reason": "<the auditor's REASON>",
+    "guidance": "<the auditor's GUIDANCE>",
+}
+log_path = Path("<target>/.loopr-state/auditor-log.jsonl")
+log_path.parent.mkdir(parents=True, exist_ok=True)
+with open(log_path, "a", encoding="utf-8", newline="\n") as handle:
+    handle.write(json.dumps(entry, sort_keys=True) + "\n")
+```
+
+Same shape as `dispatch-log.jsonl` (one JSON object per line, `sort_keys=True`, append-only, never
+rewritten) for the same reason: a diffable, greppable audit trail. A separate file, not the same
+log -- this is an adjudication record, not a dispatch decision, and the two should not be conflated
+in one grep. Then relay the auditor's `GUIDANCE` back to the reviewer so it can resume -- it resumes,
+it does not restart; restarting would discard phase context already paid for.
 
 ### Optional: verify reproducibility
 
