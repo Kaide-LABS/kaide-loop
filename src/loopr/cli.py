@@ -918,11 +918,24 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
             f"{build_complete_marker_name} exists at the target repository root; the build is "
             "complete."
         )
-    print(render_json(decision) if args.json else render_human(decision))
 
     terminal = decision.state_id == DispatchStateId.S0_TERMINAL
+    # Added 2026-08-06: S10_REWORK_STALLED is a HALT-style outcome (three consecutive spec_violating
+    # verdicts on the same phase) -- printed to stderr like every other HALT path in this function,
+    # never appended to the dispatch log (dispatch/log.py's own rule: "a HALT appends nothing"), and
+    # never mutates state, so the operator's next `loopr dispatch` re-derives the same HALT instead of
+    # silently re-dispatching loopr-step11.
+    stalled = decision.state_id == DispatchStateId.S10_REWORK_STALLED
+    rendered = render_json(decision) if args.json else render_human(decision)
+    print(rendered, file=sys.stderr if stalled else sys.stdout)
+
     if args.dry_run:
+        if stalled:
+            return exit_codes.HALT
         return exit_codes.COMPLETE if terminal else exit_codes.OK
+
+    if stalled:
+        return exit_codes.HALT
 
     log_path = store.dir / "dispatch-log.jsonl"
     append_decision(log_path, decision)

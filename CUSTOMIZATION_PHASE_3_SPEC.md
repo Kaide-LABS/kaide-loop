@@ -522,11 +522,19 @@ than the first finding, which at least refused loudly.
 | 7 | `S5_STEP11_DONE` **[architect-derived]** | `active_step is None`, verdict `None`, `build_round >= 1` | `loopr-step12` | declined: artifacts present, no `--remodernize` |
 | 8 | `S7_STEP12_CLEAN` | `active_step is None`, verdict `CLEAN` | `loopr-step11` | declined: artifacts present, no `--remodernize` |
 | 9 | `S8_STEP12_MINOR` | `active_step is None`, verdict `MINOR` | `loopr-step11` | declined: artifacts present, no `--remodernize` |
-| 10 | `S9_STEP12_SPEC_VIOLATING` | `active_step is None`, verdict `SPEC_VIOLATING` | `loopr-step11` | declined: artifacts present, no `--remodernize` |
+| 10 | `S9_STEP12_SPEC_VIOLATING` | `active_step is None`, verdict `SPEC_VIOLATING`, `consecutive_spec_violating < 3` | `loopr-step11` | declined: artifacts present, no `--remodernize` |
+| 11 | `S10_REWORK_STALLED` **[architect-derived, 2026-08-06]** | `active_step is None`, verdict `SPEC_VIOLATING`, `consecutive_spec_violating >= 3` | *(none)* — exit `HALT` | declined: rework stalled, human decision required |
 
 Rows 1–6 and 8–10 correspond to the six states the user enumerated plus the terminal state; row 7 and
 row 1 are the two architect-derived additions (§0.2 deviation 2). Row 1 is also marked derived in the
 fixture files.
+
+**Amendment (2026-08-06): row 11 added, `.claude/loopr-rework-cap/baby_prd.md`.** Row 10 no longer
+unconditionally targets `loopr-step11` — a new `DispatchState.consecutive_spec_violating` counter
+(incremented on a `spec_violating` step12 verdict, reset on `clean`/`minor`) splits it into row 10
+(below the 3-strike threshold, ordinary rework) and row 11 (at or above it, HALT and escalate to a
+human). `decide()`'s signature is unchanged; this is a new field read via the `state` parameter it
+already takes, not a new input. Full detail: `src/loopr/dispatch/controller.py`.
 
 **Four things about this table that a literal-minded implementer will otherwise get wrong:**
 
@@ -541,6 +549,11 @@ fixture files.
    `CUSTOMIZATION_PHASE_1_SPEC.md` §7.2). They are three separate states because the acceptance
    criteria require three separately-falsifiable answers and three distinct log records, and because
    collapsing them would erase the distinction the operator uses to sanity-check the loop.
+   **(2026-08-06: row 10 is now conditional, not unconditional — see row 11 above. This is also why
+   the counter that decides it is keyed on the verdict streak, not on `build_round`: the controller
+   still does not and cannot know the phase number, so it cannot reset a streak "on a new phase"
+   directly — it only ever learns a phase changed via the same `clean`/`minor` verdict that already
+   resets the streak to 0.)**
 3. **The final branch over `Step12Verdict` ends in `typing.assert_never(verdict)`.** With
    `mypy --strict`, adding a fourth verdict without a routing rule is then a *compile-time* error, not
    a runtime fall-through. Use `assert_never`, not `raise NotImplementedError` — the latter would
@@ -703,7 +716,10 @@ Concrete and testable. 1–8 are mechanical; 9 is behavioural and is not optiona
 
 1. **The state set is enumerated explicitly and is complete.** `DispatchStateId` has ten members;
    `decide()` has a routing rule for each; the two architect-derived states are labelled as such in
-   §6.2 and in the fixture files.
+   §6.2 and in the fixture files. **(2026-08-06: eleven members as of `S10_REWORK_STALLED`, three
+   architect-derived — see the row-11 amendment in §6.2. This §8 list otherwise documents Phase 3's
+   own original acceptance criteria as shipped; the rework-stall cap's own criteria live in
+   `.claude/loopr-rework-cap/baby_prd.md`.)**
 2. **One fixture file per state**, in `tests/fixtures/dispatch/`, each carrying the input state, the
    two disk facts, and a pre-written `expected` block (`state_id`, `target`, `step10_warrant`).
    Fixtures are **data files**, not live project runs.

@@ -37,6 +37,17 @@ def render_human(decision: DispatchDecision) -> str:
         ]
         return "\n".join(lines)
 
+    if decision.state_id == DispatchStateId.S10_REWORK_STALLED:
+        # Added 2026-08-06: same fixed shape as S0_TERMINAL (no RUN line -- there is no target to
+        # run), but the DISPATCH line reads as a HALT, matching the style of render_halt() below.
+        lines = [
+            _line("DISPATCH", "-- HALT; rework stalled, human decision required"),
+            _line("STATE", f"{decision.state_id.value}  (build round {decision.build_round})"),
+            _line("WHY", decision.reason),
+            _line("NOT-STEP10", decision.step10_declined_because or ""),
+        ]
+        return "\n".join(lines)
+
     assert decision.target is not None  # unconstructable otherwise, models/dispatch.py SS3.3
     lines = [
         _line("DISPATCH", decision.target.value),

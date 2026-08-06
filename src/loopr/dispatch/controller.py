@@ -32,6 +32,17 @@ _DECLINED_ARTIFACTS_PRESENT = "step10 artifacts present on disk; no --remoderniz
 """Shared declined-because text for every row that lands on step11 or step12 (CUSTOMIZATION_PHASE_3_
 SPEC.md SS6.2, rows 4 through 10). Kept as one constant so the wording cannot drift row to row."""
 
+_REWORK_STALL_THRESHOLD = 3
+"""Added 2026-08-06 (.claude/loopr-rework-cap/baby_prd.md, confirmed at the boundary gate): the
+number of CONSECUTIVE `spec_violating` step12 verdicts on the same phase that mark it as stuck rather
+than iterating. Below this count, a spec-violating verdict is ordinary rework (S9, routes back to
+loopr-step11); at or above it, the controller routes to S10_REWORK_STALLED instead and HALTs. A fixed
+constant, not a CLI flag or config value, matching decide()'s own zero-argument design (confirmed
+scope edge: operator-configurability is a later addition if 3 proves wrong in practice, not built
+here). Mirrors the documentation style of `.claude/skills/loopr/scripts/driver.py`'s own
+`_DEFAULT_MAX_ROUNDS`/`_REPEAT_GUARD_WINDOW` constants -- a named, commented magic number instead of a
+bare literal in the branch below."""
+
 
 def check_coherence(state: DispatchState, artifacts_present: bool) -> str | None:
     """The cross-disk-truth checks a Pydantic validator cannot see (CUSTOMIZATION_PHASE_3_SPEC.md
@@ -198,6 +209,20 @@ def decide(
                 build_round=state.build_round,
             )
         case Step12Verdict.SPEC_VIOLATING:
+            if state.consecutive_spec_violating >= _REWORK_STALL_THRESHOLD:
+                return DispatchDecision(
+                    state_id=DispatchStateId.S10_REWORK_STALLED,
+                    target=None,
+                    reason=(
+                        "step12 found the same phase spec-violating "
+                        f"{state.consecutive_spec_violating} times in a row (threshold "
+                        f"{_REWORK_STALL_THRESHOLD}); this phase is stuck and needs a human decision, "
+                        "not another loopr-step11 rework."
+                    ),
+                    step10_warrant=None,
+                    step10_declined_because=_DECLINED_ARTIFACTS_PRESENT,
+                    build_round=state.build_round,
+                )
             return DispatchDecision(
                 state_id=DispatchStateId.S9_STEP12_SPEC_VIOLATING,
                 target=DispatchTarget.STEP_11,
@@ -279,9 +304,24 @@ def apply_completion_transition(
     `build_round` increments on step11 COMPLETION, never on dispatch -- that timing is what makes
     S3_STEP10_DONE (`build_round == 0`, nothing built yet) and S5_STEP11_DONE (`build_round >= 1`, a
     round exists and is owed a review) distinguishable at all (SS6.2 point 1).
+
+    Also the sole writer of `consecutive_spec_violating` (added 2026-08-06): incremented here on a
+    `spec_violating` step12 verdict, reset to 0 on `clean` or `minor` -- never touched on a step11
+    completion, since step11 completing doesn't record a verdict either way.
     """
     if completed_step == CustomizationStep.STEP_11:
         return state.model_copy(update={"active_step": None, "build_round": state.build_round + 1})
     if completed_step == CustomizationStep.STEP_12:
-        return state.model_copy(update={"active_step": None, "last_step12_verdict": verdict})
+        streak = (
+            state.consecutive_spec_violating + 1
+            if verdict == Step12Verdict.SPEC_VIOLATING
+            else 0
+        )
+        return state.model_copy(
+            update={
+                "active_step": None,
+                "last_step12_verdict": verdict,
+                "consecutive_spec_violating": streak,
+            }
+        )
     return state.model_copy(update={"active_step": None})

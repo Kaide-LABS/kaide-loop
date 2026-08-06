@@ -59,6 +59,30 @@ def test_dispatch_decision_rejects_target_present_with_terminal_state_id() -> No
         )
 
 
+def test_dispatch_decision_rejects_target_present_with_rework_stalled_state_id() -> None:
+    """Added 2026-08-06: S10_REWORK_STALLED is the second state ID (besides S0_TERMINAL) that must
+    carry target=None -- it names no subagent to run."""
+    with pytest.raises(ValueError, match="target is None iff"):
+        DispatchDecision(
+            state_id=DispatchStateId.S10_REWORK_STALLED,
+            target=DispatchTarget.STEP_11,
+            reason="test",
+            step10_declined_because="test",
+            build_round=1,
+        )
+
+
+def test_dispatch_decision_accepts_target_none_with_rework_stalled_state_id() -> None:
+    decision = DispatchDecision(
+        state_id=DispatchStateId.S10_REWORK_STALLED,
+        target=None,
+        reason="test",
+        step10_declined_because="test",
+        build_round=1,
+    )
+    assert decision.target is None
+
+
 def test_dispatch_decision_rejects_a_warrant_on_a_non_step10_target() -> None:
     with pytest.raises(ValueError, match="step10_warrant is only valid"):
         DispatchDecision(
@@ -71,9 +95,10 @@ def test_dispatch_decision_rejects_a_warrant_on_a_non_step10_target() -> None:
         )
 
 
-def test_state_id_enum_has_exactly_ten_members() -> None:
-    """SS8 criterion 1: the state set is enumerated explicitly and is complete."""
-    assert len(DispatchStateId) == 10
+def test_state_id_enum_has_exactly_eleven_members() -> None:
+    """SS8 criterion 1: the state set is enumerated explicitly and is complete. Eleven since
+    2026-08-06 (.claude/loopr-rework-cap/baby_prd.md): S10_REWORK_STALLED, the rework-stall outcome."""
+    assert len(DispatchStateId) == 11
 
 
 def test_step10_warrant_enum_is_closed_at_two_members() -> None:
@@ -134,6 +159,53 @@ def test_step12_spec_violating_routes_to_step11_not_step10() -> None:
     assert decision.target == DispatchTarget.STEP_11
     assert decision.target != DispatchTarget.STEP_10
     assert decision.step10_warrant is None
+
+
+# --- Added 2026-08-06 (.claude/loopr-rework-cap/baby_prd.md): the rework-stall cap ---
+
+
+def test_spec_violating_below_stall_threshold_still_routes_to_step11() -> None:
+    """Two consecutive spec_violating verdicts is ordinary rework, not a stall -- the threshold is 3."""
+    state = DispatchState(
+        active_step=None,
+        build_round=3,
+        last_step12_verdict=Step12Verdict.SPEC_VIOLATING,
+        consecutive_spec_violating=2,
+    )
+    decision = decide(state, artifacts_present=True, build_complete_present=False)
+    assert decision.state_id == DispatchStateId.S9_STEP12_SPEC_VIOLATING
+    assert decision.target == DispatchTarget.STEP_11
+
+
+def test_spec_violating_at_stall_threshold_routes_to_rework_stalled_not_step10() -> None:
+    """The threshold itself: the 3rd consecutive spec_violating verdict on the same phase routes to
+    S10_REWORK_STALLED, target=None, and never to step10 -- the hard boundary applies here too."""
+    state = DispatchState(
+        active_step=None,
+        build_round=3,
+        last_step12_verdict=Step12Verdict.SPEC_VIOLATING,
+        consecutive_spec_violating=3,
+    )
+    decision = decide(state, artifacts_present=True, build_complete_present=False)
+    assert decision.state_id == DispatchStateId.S10_REWORK_STALLED
+    assert decision.target is None
+    assert decision.target != DispatchTarget.STEP_10
+    assert decision.step10_warrant is None
+    assert decision.step10_declined_because
+
+
+def test_spec_violating_above_stall_threshold_stays_rework_stalled() -> None:
+    """The threshold is >=, not ==: a counter that somehow exceeds 3 still HALTs, it does not fall
+    back through to an ordinary S9 rework."""
+    state = DispatchState(
+        active_step=None,
+        build_round=6,
+        last_step12_verdict=Step12Verdict.SPEC_VIOLATING,
+        consecutive_spec_violating=5,
+    )
+    decision = decide(state, artifacts_present=True, build_complete_present=False)
+    assert decision.state_id == DispatchStateId.S10_REWORK_STALLED
+    assert decision.target is None
 
 
 # --- the two architect-derived states ---
@@ -205,6 +277,15 @@ def test_step12_in_flight_resumes_step12() -> None:
         (DispatchState(build_round=1, last_step12_verdict=Step12Verdict.MINOR), True, False),
         (
             DispatchState(build_round=1, last_step12_verdict=Step12Verdict.SPEC_VIOLATING),
+            True,
+            False,
+        ),
+        (
+            DispatchState(
+                build_round=3,
+                last_step12_verdict=Step12Verdict.SPEC_VIOLATING,
+                consecutive_spec_violating=3,
+            ),
             True,
             False,
         ),

@@ -50,6 +50,18 @@ class DispatchState(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseMo
     dispatch. CLEARED when step11 is dispatched (SS6.3) -- without that clearing rule a stale verdict
     survives into the next round and S5 becomes indistinguishable from S7/S8/S9."""
 
+    consecutive_spec_violating: int = Field(default=0, ge=0)
+    """Added 2026-08-06 (.claude/loopr-rework-cap/baby_prd.md): how many `spec_violating` step12
+    verdicts have been recorded IN A ROW for the phase currently being reworked. Incremented by
+    `apply_completion_transition` when it records a `spec_violating` verdict, reset to 0 when it
+    records `clean` or `minor`. DELIBERATELY NOT keyed on `build_round` -- `build_round` increments on
+    every step11 completion, including a rework of the same phase (SS6.3), so it counts total rounds,
+    not consecutive failures on one phase; it cannot answer 'is this phase stuck' by itself. A phase
+    boundary (moving on to a new phase) only ever happens after step11 the round following a `clean`/
+    `minor` verdict (SS6.2 point 2: the controller never learns the phase number, so `S7`/`S8` are the
+    only routes that advance past a phase) -- that same verdict already resets this counter to 0, so
+    no separate phase-boundary reset is needed."""
+
     @model_validator(mode="after")
     def check_field_coherence(self) -> "DispatchState":
         if self.last_step12_verdict is not None and self.build_round < 1:
@@ -57,14 +69,29 @@ class DispatchState(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseMo
                 "last_step12_verdict is only meaningful once step11 has completed at least one "
                 f"round; got verdict={self.last_step12_verdict.value!r} with build_round=0"
             )
+        if self.consecutive_spec_violating > 0 and self.build_round < 1:
+            raise ValueError(
+                "consecutive_spec_violating is only meaningful once step11 has completed at least "
+                f"one round; got consecutive_spec_violating={self.consecutive_spec_violating} with "
+                "build_round=0"
+            )
         if self.active_step == CustomizationStep.STEP_10:
-            if self.build_round != 0 or self.last_step12_verdict is not None:
+            if (
+                self.build_round != 0
+                or self.last_step12_verdict is not None
+                or self.consecutive_spec_violating != 0
+            ):
                 raise ValueError(
-                    "active_step=step_10 requires build_round=0 and last_step12_verdict=None -- "
-                    "both entry paths reset them (greenfield: never set; re-modernization: reset "
-                    "explicitly, SS0.2 deviation 3)"
+                    "active_step=step_10 requires build_round=0, last_step12_verdict=None, and "
+                    "consecutive_spec_violating=0 -- both entry paths reset them (greenfield: never "
+                    "set; re-modernization: reset explicitly, SS0.2 deviation 3)"
                 )
         return self
+
+
+_NO_TARGET_STATE_IDS = frozenset({DispatchStateId.S0_TERMINAL, DispatchStateId.S10_REWORK_STALLED})
+"""The only two `DispatchStateId` members that carry `target=None` -- build complete (nothing left to
+run) and rework stalled (added 2026-08-06: a human decision is owed, not another subagent dispatch)."""
 
 
 class DispatchDecision(LooprBase):  # type: ignore[explicit-any]  # pydantic BaseModel's inherited model_config: ClassVar[ConfigDict] is Any-typed internally; no real Any in loopr code
@@ -75,7 +102,8 @@ class DispatchDecision(LooprBase):  # type: ignore[explicit-any]  # pydantic Bas
 
     state_id: DispatchStateId
     target: DispatchTarget | None
-    """None ONLY in S0_TERMINAL. Enforced below."""
+    """None in S0_TERMINAL and (added 2026-08-06) S10_REWORK_STALLED -- the two state IDs that do not
+    name a subagent to run. Enforced below."""
     reason: str = Field(min_length=1)
     """One sentence, present tense, naming the facts that decided it. Rendered verbatim to the human
     (SS4.3) -- write it for a person mid-loop, not for a log parser."""
@@ -93,9 +121,12 @@ class DispatchDecision(LooprBase):  # type: ignore[explicit-any]  # pydantic Bas
 
     @model_validator(mode="after")
     def check_decision_coherence(self) -> "DispatchDecision":
-        terminal = self.state_id == DispatchStateId.S0_TERMINAL
-        if terminal != (self.target is None):
-            raise ValueError("target is None iff state_id is S0_TERMINAL")
+        no_target = self.state_id in _NO_TARGET_STATE_IDS
+        if no_target != (self.target is None):
+            raise ValueError(
+                "target is None iff state_id is S0_TERMINAL or S10_REWORK_STALLED -- the only two "
+                "outcomes that do not name a subagent to run"
+            )
         is_step10 = self.target == DispatchTarget.STEP_10
         if is_step10 and self.step10_warrant is None:
             raise ValueError(

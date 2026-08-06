@@ -455,7 +455,7 @@ def test_dispatch_verify_all_real_fixtures_pass(capsys: pytest.CaptureFixture[st
     out = capsys.readouterr().out
     assert code == exit_codes.OK
     assert "MISMATCH" not in out
-    assert "10/10" in out
+    assert "11/11" in out
 
 
 def test_dispatch_verify_catches_a_corrupted_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

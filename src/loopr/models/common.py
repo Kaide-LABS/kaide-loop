@@ -185,3 +185,8 @@ class DispatchStateId(str, Enum):
     S7_STEP12_CLEAN = "s7_step12_clean"
     S8_STEP12_MINOR = "s8_step12_minor"
     S9_STEP12_SPEC_VIOLATING = "s9_step12_spec_violating"
+    S10_REWORK_STALLED = "s10_rework_stalled"
+    """Added 2026-08-06 (.claude/loopr-rework-cap/baby_prd.md, confirmed boundary): the 11th outcome.
+    Fires when the same phase has collected `_REWORK_STALL_THRESHOLD` consecutive `spec_violating`
+    step12 verdicts in a row -- the controller HALTs and escalates to a human instead of routing back
+    to `loopr-step11` again. Like `S0_TERMINAL`, carries no dispatch target."""

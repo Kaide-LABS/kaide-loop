@@ -30,9 +30,10 @@ def test_exactly_one_fixture_per_state() -> None:
     assert fixture_state_ids == {member.value for member in DispatchStateId}
 
 
-def test_exactly_two_fixtures_are_marked_derived() -> None:
-    """SS6.2: row 1 (S0_TERMINAL) and row 7 (S5_STEP11_DONE) are the two architect-derived additions;
-    every other fixture is one of the user's six pre-written answers."""
+def test_exactly_three_fixtures_are_marked_derived() -> None:
+    """SS6.2: row 1 (S0_TERMINAL) and row 7 (S5_STEP11_DONE) are the two architect-derived additions
+    from Phase 3; row 11 (S10_REWORK_STALLED, added 2026-08-06, .claude/loopr-rework-cap/baby_prd.md)
+    is the third. Every other fixture is one of the user's six pre-written answers."""
     derived_ids = set()
     for path in FIXTURE_PATHS:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -41,6 +42,7 @@ def test_exactly_two_fixtures_are_marked_derived() -> None:
     assert derived_ids == {
         DispatchStateId.S0_TERMINAL.value,
         DispatchStateId.S5_STEP11_DONE.value,
+        DispatchStateId.S10_REWORK_STALLED.value,
     }
 
 
@@ -84,9 +86,11 @@ def test_render_human_golden_shape(fixture_path: Path) -> None:
     if decision.target == DispatchTarget.STEP_10:
         assert lines[3].startswith("WARRANT")
         assert not any(line.startswith("NOT-STEP10") for line in lines)
-    elif decision.state_id != DispatchStateId.S0_TERMINAL:
+    elif decision.target is not None:
         assert lines[3].startswith("NOT-STEP10")
         assert lines[4] == ""
         assert lines[5].startswith("RUN")
     else:
+        # target is None: S0_TERMINAL or (added 2026-08-06) S10_REWORK_STALLED -- neither has
+        # anything to run, so there is no RUN line.
         assert lines[3].startswith("NOT-STEP10")

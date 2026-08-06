@@ -83,12 +83,16 @@ def test_full_round_trip_trace_reproduces_exactly() -> None:
     state = apply_dispatch_transition(state, decision.target)
     assert state == DispatchState(active_step=CustomizationStep.STEP_12, build_round=2)
 
-    # complete(step12, SPEC_VIOLATING) -> state becomes (None, 2, SPEC_VIOLATING)
+    # complete(step12, SPEC_VIOLATING) -> state becomes (None, 2, SPEC_VIOLATING); the new
+    # consecutive_spec_violating counter (added 2026-08-06) also ticks to 1 here.
     state = apply_completion_transition(
         state, CustomizationStep.STEP_12, Step12Verdict.SPEC_VIOLATING
     )
     assert state == DispatchState(
-        active_step=None, build_round=2, last_step12_verdict=Step12Verdict.SPEC_VIOLATING
+        active_step=None,
+        build_round=2,
+        last_step12_verdict=Step12Verdict.SPEC_VIOLATING,
+        consecutive_spec_violating=1,
     )
 
     # (None, 2, SPEC_VIOLATING) -> S9 -> step11 (rework) ; state becomes (STEP_11, 2, None)
@@ -97,11 +101,18 @@ def test_full_round_trip_trace_reproduces_exactly() -> None:
     assert decision.state_id == DispatchStateId.S9_STEP12_SPEC_VIOLATING
     assert decision.target == DispatchTarget.STEP_11
     state = apply_dispatch_transition(state, decision.target)
-    assert state == DispatchState(active_step=CustomizationStep.STEP_11, build_round=2)
+    # the clearing rule resets last_step12_verdict, but NOT consecutive_spec_violating -- the streak
+    # must survive the rework dispatch, or a stall spanning 3 rounds could never be counted.
+    assert state == DispatchState(
+        active_step=CustomizationStep.STEP_11, build_round=2, consecutive_spec_violating=1
+    )
 
-    # complete(step11) -> state becomes (None, 3, None)
+    # complete(step11) -> state becomes (None, 3, None); the streak (1) is untouched by a step11
+    # completion -- only a step12 verdict writes it.
     state = apply_completion_transition(state, CustomizationStep.STEP_11, None)
-    assert state == DispatchState(active_step=None, build_round=3, last_step12_verdict=None)
+    assert state == DispatchState(
+        active_step=None, build_round=3, last_step12_verdict=None, consecutive_spec_violating=1
+    )
 
     # (None, 3, None) -> S5 -> step12
     decision = decide(state, artifacts_present, build_complete_present)
@@ -144,3 +155,62 @@ def test_build_round_increments_on_completion_not_dispatch() -> None:
 
     completed = apply_completion_transition(dispatched, CustomizationStep.STEP_11, None)
     assert completed.build_round == 1
+
+
+# --- Added 2026-08-06 (.claude/loopr-rework-cap/baby_prd.md): the rework-stall cap ---
+
+
+def test_mixed_verdict_sequence_does_not_false_trigger_the_stall_threshold() -> None:
+    """Acceptance criterion 2: a sequence that interleaves clean/minor with spec_violating verdicts is
+    healthy iteration (rework converging, then a fresh phase starting), not a stall -- the counter must
+    not silently carry a partial streak across a clean/minor verdict. Drives the full dispatch/complete
+    cycle exactly like `cli.py` does, the same style as `test_full_round_trip_trace_reproduces_exactly`.
+    Only a genuine run of `_REWORK_STALL_THRESHOLD` consecutive spec_violating verdicts stalls."""
+    artifacts_present = True
+    build_complete_present = False
+
+    def build_and_review(state: DispatchState, verdict: Step12Verdict) -> DispatchState:
+        decision = decide(state, artifacts_present, build_complete_present)
+        assert decision.target == DispatchTarget.STEP_11
+        state = apply_dispatch_transition(state, decision.target)
+        state = apply_completion_transition(state, CustomizationStep.STEP_11, None)
+
+        decision = decide(state, artifacts_present, build_complete_present)
+        assert decision.target == DispatchTarget.STEP_12
+        state = apply_dispatch_transition(state, decision.target)
+        return apply_completion_transition(state, CustomizationStep.STEP_12, verdict)
+
+    state = DispatchState()
+
+    # two spec_violating verdicts in a row on the same phase: ordinary rework, below the threshold.
+    state = build_and_review(state, Step12Verdict.SPEC_VIOLATING)
+    assert state.consecutive_spec_violating == 1
+    state = build_and_review(state, Step12Verdict.SPEC_VIOLATING)
+    assert state.consecutive_spec_violating == 2
+    assert (
+        decide(state, artifacts_present, build_complete_present).state_id
+        == DispatchStateId.S9_STEP12_SPEC_VIOLATING
+    )
+
+    # a clean verdict resets the streak -- the phase converged, it did not stall.
+    state = build_and_review(state, Step12Verdict.CLEAN)
+    assert state.consecutive_spec_violating == 0
+    assert (
+        decide(state, artifacts_present, build_complete_present).state_id
+        == DispatchStateId.S7_STEP12_CLEAN
+    )
+
+    # a fresh run of consecutive spec_violating verdicts on the next phase genuinely stalls at 3.
+    for _ in range(2):
+        state = build_and_review(state, Step12Verdict.SPEC_VIOLATING)
+    assert state.consecutive_spec_violating == 2
+    assert (
+        decide(state, artifacts_present, build_complete_present).state_id
+        == DispatchStateId.S9_STEP12_SPEC_VIOLATING
+    )
+
+    state = build_and_review(state, Step12Verdict.SPEC_VIOLATING)
+    assert state.consecutive_spec_violating == 3
+    decision = decide(state, artifacts_present, build_complete_present)
+    assert decision.state_id == DispatchStateId.S10_REWORK_STALLED
+    assert decision.target is None

@@ -796,6 +796,13 @@ decision recorded in `loopr-MIGRATION.md`.
   boundary says such a case "should surface as an open question, not get silently built in." Surfaced
   here. `build_round` is persisted and logged, so the data to build a cap exists the moment a policy
   for it is decided — the counter is not the missing piece, the policy is.
+  **[FIXED 2026-08-06]** That last sentence was wrong: `build_round` increments on every step11
+  completion, including a rework of the same phase, so it counts total rounds, not consecutive
+  failures — it could not have driven a cap by itself. A cap now exists: 3 consecutive `spec_violating`
+  verdicts on the same phase route to a new HALT-style outcome (`S10_REWORK_STALLED`) instead of back
+  to `loopr-step11`, driven by a new `DispatchState.consecutive_spec_violating` counter. See `decide()`
+  / `apply_completion_transition()` in `src/loopr/dispatch/controller.py` and
+  `.claude/loopr-rework-cap/baby_prd.md` for the confirmed design.
 - **Who writes `last_step12_verdict`, and how severity is graded (raised 2026-08-04).** The verdict is
   recorded by an explicit act at step12's completion, not inferred. Deriving it instead from git
   markers (`chore: Phase N review approved` present/absent, `fix: Phase N review patch` present/absent)

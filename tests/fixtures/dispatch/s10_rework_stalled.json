@@ -1,0 +1,17 @@
+{
+  "derived": true,
+  "derived_reason": "Added 2026-08-06 (.claude/loopr-rework-cap/baby_prd.md): the 11th, architect-derived outcome -- three consecutive spec_violating step12 verdicts on the same phase (consecutive_spec_violating >= _REWORK_STALL_THRESHOLD) route to a HALT-style outcome instead of back to loopr-step11, so a genuinely stuck phase reaches a human instead of cycling forever.",
+  "state": {
+    "active_step": null,
+    "build_round": 5,
+    "last_step12_verdict": "spec_violating",
+    "consecutive_spec_violating": 3
+  },
+  "artifacts_present": true,
+  "build_complete_present": false,
+  "expected": {
+    "state_id": "s10_rework_stalled",
+    "target": null,
+    "step10_warrant": null
+  }
+}
