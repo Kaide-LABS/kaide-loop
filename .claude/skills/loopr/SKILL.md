@@ -235,6 +235,64 @@ log -- this is an adjudication record, not a dispatch decision, and the two shou
 in one grep. Then relay the auditor's `GUIDANCE` back to the reviewer so it can resume -- it resumes,
 it does not restart; restarting would discard phase context already paid for.
 
+### 7. Run the dispatch loop -- the mechanical wrapper around step 5/6 (optional, once at least step10 is customized)
+
+`.claude/loopr-loop-driver/baby_prd.md` (confirmed via a real `/loopr` interrogation, 2026-08-06)
+automates the mechanical round-trip you were otherwise running by hand for every single round: `loopr
+dispatch` -> read its decision -> dispatch the named subagent via the Agent tool -> `loopr
+dispatch-complete` -> repeat. **The one thing that cannot be automated out of this loop:** only a live
+Claude Code session can invoke the Agent tool (`Task(subagent_type=...)`) -- a standalone script has
+no way to do that itself. So `.claude/skills/loopr/scripts/driver.py` automates everything mechanical
+and judgment-free (calling `loopr dispatch`/`dispatch-complete`, parsing exit codes, logging every
+mechanical action to `driver-log.jsonl`, a THIRD log alongside `dispatch-log.jsonl` and
+`auditor-log.jsonl` in the same state directory) and hands back to you, the session, exactly what to
+do next. It makes zero LLM calls and contains zero judgment logic of its own -- grep it; the only
+things it branches on are exit codes and the small set of already-structured `DispatchDecision` fields
+its two safety guards (a round cap, and a same-decision-three-times-in-a-row no-progress check)
+compare for exact equality, never decision *text*.
+
+**The loop, one round at a time:**
+
+1. Run `python .claude/skills/loopr/scripts/driver.py dispatch --state <path> [--modernized-prd-path
+   PATH] [--phase-1-spec-path PATH] [--build-complete-path PATH] [--remodernize] [--max-rounds N]`
+   (same override flags step 5's `loopr dispatch` takes, forwarded verbatim; `--max-rounds` defaults
+   to 20 -- a structural circuit breaker against a driver bug repeating real subagent side effects, not
+   a rework-cap policy, see the file's own docstring).
+   - Exit `40` (HALT) -- from `loopr dispatch` itself, or from the driver's own two safety guards. Read
+     the printed block. **STOP.** Surface it to the human. Do not dispatch anything, especially not on
+     your own initiative "to be safe."
+   - Exit `50` (COMPLETE) -- the build is done. Stop; nothing left to run.
+   - Exit `0` (OK) -- parse the printed decision's `target` field and dispatch it yourself:
+     `Task(subagent_type="<target>")`. This is the one step only you can do.
+2. Read the dispatched subagent's own output in full, the same way you already would without this
+   driver. Two things only you can judge (never the script, never a heuristic):
+   - **A genuine gate/judge/question moment inside that subagent's own run** (it asks a real question,
+     halts on an unrecoverable issue, needs a decision only a human can make). If so: run
+     `python .claude/skills/loopr/scripts/driver.py log-stop --state <path> --kind subagent_gate
+     --subagent <target> --reason "<why>"`, then **STOP** and surface it. Do not call `complete`.
+   - **If the target was `loopr-step12`:** scan its PER-ITEM VERDICT TRACKING output for an
+     escalation-eligible `UNCERTAIN` item (per `.claude/agents/loopr-step12.md`: low confidence, or
+     Hard Invariant Preservation / Hard Boundary category regardless of confidence). If found: escalate
+     exactly per step 6 above -- extract the item's spec clause, file/line, and step12's written reason
+     (never the full diff, never a reimplemented extraction), dispatch `loopr-auditor`, append its
+     verdict to `auditor-log.jsonl` (step 6's exact snippet), then run
+     `python .claude/skills/loopr/scripts/driver.py log-stop --state <path> --kind step12_uncertain
+     --subagent loopr-step12 --reason "<item + auditor verdict summary>"`, then **STOP** and surface
+     the auditor's verdict. The driver does not chain into `complete` for this round on its own --
+     a genuine escalation is a human-awareness point even once the auditor has resolved it, not merely
+     a delay until it resolves.
+3. Otherwise -- a clean completion, no gate, no escalation-eligible `UNCERTAIN` item -- run
+   `python .claude/skills/loopr/scripts/driver.py complete --state <path> [--verdict
+   clean|minor|spec_violating]` (verdict only when the completed step was `loopr-step12`), then go back
+   to step 1 immediately. **No human-authored command in between** -- you (the session) chain this on
+   your own initiative, the same discipline the rest of this skill already applies to `loopr step`'s
+   `OK`/exit-`0` re-invoke loop.
+
+`driver-log.jsonl` is the full audit trail: every `dispatch_ok` / `dispatch_halt` /
+`dispatch_complete_terminal` / `complete_ok` / `complete_error` / `stop_subagent_gate` /
+`stop_step12_uncertain` / `guard_halt` entry, timestamped, so a third party can recount automated
+rounds versus human interventions from the log alone, without asking you.
+
 ### Optional: verify reproducibility
 
 ```

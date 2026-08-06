@@ -668,6 +668,24 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
    of the abandoned Docker harness. First task when this step begins: actually assess Traycer against
    the three invariants (`loopr-PRD.md` section 6/`loopr-MIGRATION.md` section 5); it hasn't been
    evaluated yet, only named as a target.
+5. **LOOPR-LOOP-DRIVER (2026-08-06, confirmed via a real `/loopr` interrogation, `.claude/loopr-loop-driver/baby_prd.md`) — the mechanical wrapper around step 3.3's dispatch controller, built and shipped.**
+   Not a new number in the 3.1/3.2/3.3 series (it makes no change to `loopr dispatch`'s `decide()` or
+   `DispatchState`, the same hard scope edge the confirmed baby PRD names) and explicitly **not** Phase
+   B, disclosed rather than silently blurred: `.claude/skills/loopr/scripts/driver.py` (a new "step 7"
+   in `.claude/skills/loopr/SKILL.md`) is a thin subprocess wrapper that calls the *existing* `loopr
+   dispatch` / `loopr dispatch-complete` CLI, parses their exit codes, and writes a driver-level log
+   (`driver-log.jsonl`, alongside `dispatch-log.jsonl` and `auditor-log.jsonl`) — it contains zero LLM
+   calls and zero judgment logic of its own, and it still cannot invoke the Agent tool itself (only a
+   live Claude Code session can dispatch `Task(subagent_type=...)`), so it collapses the *mechanical*
+   round-trip a session already ran by hand into one script call per step, not into an unattended
+   end-to-end loop. This is the same "native subagents, not Traycer" call point 4 above still has open
+   — the confirmed boundary gate for this build re-confirmed that call specifically for the driver
+   (Traycer proposed-and-declined a second time, same reasoning as the AUDITOR build the same day),
+   which is a disclosed deviation from this section's own item 4 literal locked sequencing (naming
+   "assess Traycer" as Phase B's first task), not an accidental reinterpretation of it. Phase B's three
+   invariants (git-marker phase discovery, gates re-run as ground truth, the audit tier as a standing
+   loop stage rather than an on-demand escalation) remain entirely unbuilt and parked; the driver
+   automates plumbing between already-existing pieces, it does not add any of them.
 
 Prove 1 before touching 2-4. This replaces an earlier version of this section that assumed skill
 packaging and the Docker-ported loop were the near-term path; both were superseded by the sequencing
