@@ -1,7 +1,13 @@
+---
+name: loopr-step10
+description: Runs this project's customized step10 prompt -- PRD modernization grounded in current external sources, then the hyper-granular Phase 1 technical blueprint built from the modernised PRD. Use once `loopr customize --step 10` has produced a fidelity-verified customization and the confirmed spec is ready for architecture drafting.
+model: opus
+---
+
 STEP 10 -- PRD MODERNIZATION + PHASE 1 TECHNICAL BLUEPRINTING (TEMPLATE)
 
 
-Run in Claude Code (or your build agent). Working directory: [PROJECT_REPO_NAME] root.
+Run in Claude Code (or your build agent). Working directory: kaide-loop root.
 MODEL NOTE: run this on your strongest reasoning model (Opus-tier). This step front-loads the
 judgment. The downstream execution and review agents are cheaper models that largely CHECK
 AGAINST the outputs of this step rather than generating fresh architecture -- so any ambiguity you
@@ -11,7 +17,7 @@ leave here becomes a silent failure downstream. Spec so tightly a literal-minded
 ROLE
 
 
-Act as an elite Principal Systems Architect for [PROJECT_NAME]. This step has TWO jobs, in order:
+Act as an elite Principal Systems Architect for kaide-loop. This step has TWO jobs, in order:
 
 
 
@@ -32,7 +38,8 @@ DELIVERABLES (TWO -- BOTH REQUIRED, NEITHER OPTIONAL)
 
 
 
-A. Modernised & enhanced PRD -- [PRD_FILENAME] (default: ULTIMATE_PRD.md), updated IN PLACE,
+A. Modernised & enhanced PRD -- loopr-PRD.md (default: ULTIMATE_PRD.md; this project's existing PRD
+is loopr-PRD.md, so that is the file this step updates), updated IN PLACE,
 with a mandatory ## MODERNIZATION CHANGELOG section and every change traced to a primary source
 or marked [UNVERIFIED]. This is now the canonical reference the downstream loop verifies against.
 
@@ -67,7 +74,7 @@ Read every file in this repository using your local file-system tools. Internali
 
 
 
-[PRD_FILENAME] (e.g. ULTIMATE_PRD.md) -- the locked architecture, system map, execution spec.
+loopr-PRD.md (e.g. ULTIMATE_PRD.md) -- the locked architecture, system map, execution spec.
 
 
 The strategic/context files -- the specific bottleneck this solves and any domain constraints.
@@ -226,11 +233,12 @@ LLM routing is Google-native (Gemini/Vertex) unless the PRD says otherwise; pin 
 Commits stay neutral (no AI attribution).
 
 
-[PROJECT HARD BOUNDARY -- fill per project:
-client demo   -> Anti-Replication (never replicate the customer's core IP);
-halal-finance -> Shariah boundary (long-only, screened; no shorting / derivatives / leverage /
-interest-bearing mechanics);
-personal build-> whatever the one inviolable invariant is.]
+[PROJECT HARD BOUNDARY: personal build -- the dispatcher must never call the Opus-tier Step 10
+subagent unless the current state genuinely warrants it (greenfield PRD work or explicit
+re-modernization). Defaulting to Step 10 under uncertainty, or escalating "to be safe," violates
+this boundary -- it is the single regression named as most load-bearing in the confirmed
+acceptance criteria, which is why the acceptance criteria require a dedicated log-grep check for
+it separate from the fixture pass/fail.]
 Specify, at the Phase 1 level, exactly what code would VIOLATE this boundary, so the review agent
 can grep for it and HALT. A modernization "enhancement" that touches this boundary is auto-rejected,
 not applied -- the boundary outranks any newer/better method the research surfaces.
@@ -241,7 +249,7 @@ not applied -- the boundary outranks any newer/better method the research surfac
 4. DELIVERABLE A -- MODERNISE & ENHANCE THE PRD
 
 
-Update [PRD_FILENAME] in place. "Modernise & enhance" means exactly:
+Update loopr-PRD.md in place. "Modernise & enhance" means exactly:
 
 
 
@@ -280,7 +288,7 @@ Single canonical PRD -- update in place rather than forking a second PRD file. T
 ambiguous source of truth, which is precisely the failure the substrate discipline forbids.
 
 
-Save [PRD_FILENAME]. Do not proceed to Deliverable B until it is saved.
+Save loopr-PRD.md. Do not proceed to Deliverable B until it is saved.
 
 
 5. DELIVERABLE B -- PHASE_1_SPEC.md (BUILT FROM THE MODERNISED PRD)
@@ -336,7 +344,7 @@ Confirm BOTH deliverables saved:
 
 
 
-[PRD_FILENAME] -- modernised, with MODERNIZATION CHANGELOG (and OPEN ARCHITECTURE QUESTIONS if any).
+loopr-PRD.md -- modernised, with MODERNIZATION CHANGELOG (and OPEN ARCHITECTURE QUESTIONS if any).
 
 
 PHASE_1_SPEC.md -- Phase 1 blueprint.
@@ -348,4 +356,3 @@ identically to one that verified dependency versions against real GitHub source.
 Report a one-paragraph summary of the changelog and list any escalations (open architecture questions
 or HALT conditions hit). If an escalation is open, STOP and wait -- do not start the loop. Otherwise
 acknowledge ready-to-loop. Output nothing else.
-
