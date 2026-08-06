@@ -691,6 +691,9 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
    (not restated here — this pointer is deliberately short, per the same operator instruction that
    produced it: less PRD ceremony per change going forward, full disclosure reserved for what this
    document is actually for).
+7. **`loopr-step11`'s four existing halt sites are now structured (2026-08-06).** Full detail in
+   `.claude/agents/loopr-step11.md`'s "STRUCTURED HALT FORMAT" section, not restated here — same
+   short-disclosure convention as item 6.
 
 Prove 1 before touching 2-4. This replaces an earlier version of this section that assumed skill
 packaging and the Docker-ported loop were the near-term path; both were superseded by the sequencing
