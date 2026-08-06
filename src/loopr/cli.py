@@ -259,6 +259,17 @@ def cmd_status(args: argparse.Namespace) -> int:
     return exit_codes.OK
 
 
+_EMITTED_FROM_MARKER = ".emitted_from.json"
+_MARKER_PROBLEM_STATEMENT_TRUNCATE = 80
+
+
+def _truncate_problem_statement(problem_statement: str | None) -> str:
+    text = problem_statement or "(no problem statement recorded)"
+    if len(text) > _MARKER_PROBLEM_STATEMENT_TRUNCATE:
+        return text[:_MARKER_PROBLEM_STATEMENT_TRUNCATE] + "..."
+    return text
+
+
 def cmd_emit(args: argparse.Namespace) -> int:
     store = StateStore(Path(args.state))
     state = store.load()
@@ -267,7 +278,50 @@ def cmd_emit(args: argparse.Namespace) -> int:
         print("refusing to emit: not all six conditions currently pass", file=sys.stderr)
         return exit_codes.HALT
 
+    state_path = Path(args.state).resolve()
     out_dir = Path(args.out) if args.out else Path(state.repo_root) / ".claude" / "loopr"
+
+    # out_dir may be shared by multiple, concurrently-tracked state files (this repo dogfoods
+    # loopr on itself and does exactly this). A sidecar marker -- not a new InterrogationState
+    # field, matching the "don't grow persisted state for a derivable fact" discipline the
+    # dispatch module already applies -- records which state file last emitted here, so a
+    # second, unrelated project's emit refuses instead of silently overwriting the first.
+    marker_path = out_dir / _EMITTED_FROM_MARKER
+    if marker_path.exists():
+        try:
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            recorded_state_path = Path(str(marker["state_path"]))
+            recorded_problem_statement = marker.get("problem_statement")
+        except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            print(
+                f"refusing to emit: {marker_path} exists but is not a valid emit marker "
+                f"({exc}) -- resolve or remove it before retrying",
+                file=sys.stderr,
+            )
+            return exit_codes.HALT
+
+        if recorded_state_path != state_path:
+            print(
+                f"refusing to emit: {out_dir} already holds artifacts emitted from a "
+                "different state file.",
+                file=sys.stderr,
+            )
+            print(
+                f"  already emitted from: {recorded_state_path} "
+                f"({_truncate_problem_statement(recorded_problem_statement)})",
+                file=sys.stderr,
+            )
+            print(
+                f"  this emit is from:    {state_path} "
+                f"({_truncate_problem_statement(state.problem_statement)})",
+                file=sys.stderr,
+            )
+            print(
+                "  use --out <dir> to target a different directory instead of overwriting.",
+                file=sys.stderr,
+            )
+            return exit_codes.HALT
+
     out_dir.mkdir(parents=True, exist_ok=True)
 
     tldr = (
@@ -280,6 +334,13 @@ def cmd_emit(args: argparse.Namespace) -> int:
         (out_dir / "conformance-ledger.md").write_text(
             render_conformance_ledger(state), encoding="utf-8"
         )
+
+    marker_path.write_text(
+        json.dumps(
+            {"state_path": str(state_path), "problem_statement": state.problem_statement}
+        ),
+        encoding="utf-8",
+    )
 
     print(f"emitted artifacts to {out_dir}")
     return exit_codes.COMPLETE
