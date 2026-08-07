@@ -695,7 +695,12 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
    document is actually for).
 7. **`loopr-step11`'s four existing halt sites are now structured (2026-08-06).** Full detail in
    `.claude/agents/loopr-step11.md`'s "STRUCTURED HALT FORMAT" section, not restated here — same
-   short-disclosure convention as item 6.
+   short-disclosure convention as item 6. Format-compliance caveat (2026-08-07): bumping the
+   subagent's `effort` from `low` to `medium` and re-testing 5 real `BUILD_ALREADY_COMPLETE`
+   dispatches did not meaningfully help (2/5 exact-block vs. 1/5 at `low`, and one dispatch picked
+   the wrong halt kind) -- reverted to `low`; unreliable verbatim compliance is accepted as a
+   permanent limitation, not a TODO, since step12 reviews the actual code output regardless of
+   halt-message polish.
 
 Prove 1 before touching 2-4. This replaces an earlier version of this section that assumed skill
 packaging and the Docker-ported loop were the near-term path; both were superseded by the sequencing
