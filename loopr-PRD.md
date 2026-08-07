@@ -774,8 +774,17 @@ decision recorded in `loopr-MIGRATION.md`.
   both the detailed bullet and the HANDOFF FORMAT template (explicit "literal decimal number, never a
   qualitative word" language, with examples). Re-verified live against the identical withheld-evidence
   scenario: step12 produced `CONFIDENCE 0.1`, a real parseable number.
-- Interrogation question-generation/grouping logic — not yet specified.
-- The `context.md`-vs-baby-PRD split classifier — not yet specified.
+- ~~Interrogation question-generation/grouping logic — not yet specified.~~ **[NARROWED 2026-08-07]**
+  Single-condition targeting (one question per failing condition, `src/loopr/interrogation/
+  questions.py`) is confirmed sufficient in practice — 6 full interrogations across 2026-08-06 with
+  zero friction, real usage evidence, not a hypothetical. Genuinely still open, low priority: whether
+  *multiple* simultaneously-failing conditions should ever group into one combined question instead
+  of asking one at a time. Not built; no evidence yet that it's needed.
+- ~~The `context.md`-vs-baby-PRD split classifier — not yet specified.~~ **[RESOLVED, stale note]**
+  Already built and exercised all of 2026-08-06: the `c5_soft_context_v2` judge rubric
+  (`src/loopr/rubrics/texts.py`) *is* the classifier — its relevance check plus "misplaced" flag
+  (expressible as a spec requirement → belongs in acceptance criteria, not context.md) is exactly
+  the split this note said was missing.
 - ~~Standalone module's exact interface/CLI surface — not yet specified.~~ **[RESOLVED 2026-07-28]**
   Decided as part of the Step 10 modernization, because it is the same question as "how does a judge
   call actually get invoked," which Phase 1 cannot be built without. **Decision: the module never
