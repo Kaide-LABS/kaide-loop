@@ -698,7 +698,12 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
    short-disclosure convention as item 6. Format-compliance caveat (2026-08-07): bumping the
    subagent's `effort` from `low` to `medium` and re-testing 5 real `BUILD_ALREADY_COMPLETE`
    dispatches did not meaningfully help (2/5 exact-block vs. 1/5 at `low`, and one dispatch picked
-   the wrong halt kind) -- reverted to `low`; unreliable verbatim compliance is accepted as a
+   the wrong halt kind) -- reverted to `low`. A prompt-level fix was also tried (2026-08-10):
+   restructured the STRUCTURED HALT FORMAT section with a mechanical "first character must be H"
+   rule, WRONG/RIGHT examples using the real observed failure text, and inline reminders at each
+   of the 4 firing sites -- re-tested 5/5, made it worse (0/5 exact-block; several dispatches'
+   prose closely mirrored the WRONG example's wording, suggesting the negative example was imitated
+   as a template rather than avoided) -- reverted. Unreliable verbatim compliance is accepted as a
    permanent limitation, not a TODO, since step12 reviews the actual code output regardless of
    halt-message polish.
 
