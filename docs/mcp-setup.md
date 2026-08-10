@@ -151,9 +151,14 @@ not a Docker flag) — the token's own scope is the second, independent layer of
 from this instruction alone").
 
 ```bash
-claude mcp add --transport stdio --env GITHUB_PERSONAL_ACCESS_TOKEN=<your-token> github \
-  -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server --read-only
+claude mcp add --scope user github -e GITHUB_PERSONAL_ACCESS_TOKEN=<your-token> \
+  -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server stdio --read-only
 ```
+
+The server name (`github`) must come before the `-e` flag, not after — `claude mcp add`'s parser
+otherwise misreads the name as part of the environment-variable value and fails with "Invalid
+environment variable format." `--scope user` makes it available in every project, not just the one
+you're standing in when you run this (default scope is `local`, project-only).
 
 Replace `<your-token>` with the token from 3a. Verify:
 
@@ -167,9 +172,13 @@ most likely causes: Docker not running, token pasted with a trailing space/newli
 already expired.
 
 **Source verified:** README and LICENSE at <https://github.com/github/github-mcp-server>, 2026-08-06
-— confirmed exact Docker invocation, `GITHUB_PERSONAL_ACCESS_TOKEN` env var name, and that
-`--read-only` is a server flag (write tools are skipped even if explicitly requested via `--tools`
-when this flag is set).
+— confirmed `GITHUB_PERSONAL_ACCESS_TOKEN` env var name and that `--read-only` is a server flag
+(write tools are skipped even if explicitly requested via `--tools` when this flag is set).
+**The Docker invocation itself was NOT actually run at doc-writing time — only read from the
+README, and it was wrong** (missing the required `stdio` subcommand; running without it just prints
+help text and exits). Found and fixed 2026-08-07 by actually running the container with a real
+token and a real MCP handshake, not by re-reading the docs more carefully. The command above is the
+one that was live-tested.
 
 ---
 
