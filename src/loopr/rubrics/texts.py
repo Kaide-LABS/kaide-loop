@@ -261,4 +261,51 @@ RUBRICS: Mapping[JudgeCallType, RubricSpec] = {
             "actually described by the given problem statement, acceptance criteria, and boundary."
         ),
     ),
+    JudgeCallType.STEP14_CUSTOMIZATION: RubricSpec(
+        rubric_id="step14_customization_v1",
+        text=(
+            "Customize this template for THIS project, using only the confirmed problem statement, "
+            "acceptance criteria, scope edges, boundary, soft context notes, conformance summary, "
+            "repo_root (the project's real filesystem path), and the project's own PHASE_1_SPEC.md "
+            "(produced by step10 having actually run) given -- never invent detail, never import an "
+            "example from another project. This is a synthesis task, not a pass/fail judgment: fill "
+            "and adapt every placeholder you can resolve from the given fields; where a placeholder's "
+            "value is not yet knowable even now, leave it exactly as it appears in the template -- do "
+            "not guess, do not delete it, do not fabricate a plausible-looking value. Resolve "
+            "[PROJECT_NAME], [PROJECT_REPO_NAME], [PROJECT], and [PROJECT_TAG] from repo_root (the "
+            "repo's real directory name, and a readable project name/short tag derived from it plus "
+            "the confirmed problem statement) -- these ARE genuinely resolvable now, do not leave "
+            "them as placeholders for lack of a dedicated project-name field. Resolve [PHASE_COUNT] "
+            "by reading it directly from PHASE_1_SPEC.md's own SS0 phase-plan header ('Phase 1 of "
+            "N') -- it is now genuinely knowable, precisely because step10 has already run. "
+            "PRESERVE EVERY SECTION, IN THE SAME ORDER, WITH THE SAME HEADERS, EXCEPT: the "
+            "'TEMPLATE CUSTOMIZATION CHECKLIST' section must be removed entirely from your output -- "
+            "its own text says to remove it before use, it is scaffolding for a human customizing by "
+            "hand, never content for the executing agent. Elsewhere, fill and adapt, never "
+            "restructure, condense, reorder, or rewrite the template's own shape -- this includes the "
+            "six numbered MAINTAINED SECTIONS subsections (### 1 through ### 6), which must all "
+            "survive as distinct headers; this template describes what the comprehension pass itself "
+            "must produce each time it runs, it is not asking you to draft COMPREHENSION.md content "
+            "now. Tags and reject-pattern shorthand that merely LOOK like placeholders (e.g. the "
+            "checkbox markup '[ ]', or '[UNVERIFIED]' -- reused deliberately from step10's own "
+            "runtime-emitted tag, for the executing agent's own domain-figure marking, not something "
+            "you resolve) are not placeholders -- leave them completely untouched, byte-for-byte. "
+            "Return the customized text only."
+        ),
+    ),
+    JudgeCallType.STEP14_FIDELITY_JUDGE: RubricSpec(
+        rubric_id="step14_fidelity_judge_v1",
+        text=(
+            "Given the original template and the customized output, is the injected content "
+            "genuinely specific to THIS project -- naming its actual files, invariants, and phase "
+            "count -- or is it generic filler that would read identically for any project? Verbatim "
+            "template text with placeholders merely deleted (not replaced with real, project-specific "
+            "content) is a FAIL, not a pass. Confirm the six numbered MAINTAINED SECTIONS instructions "
+            "(### 1 through ### 6) all survive as distinct, adapted sections describing what THIS "
+            "project's comprehension pass must produce -- collapsing them into fewer sections, or "
+            "leaving them as inert boilerplate with no project grounding, is a FAIL. Reject outright "
+            "if any resolved value could describe an arbitrary, unrelated project rather than the one "
+            "actually described by the given problem statement, acceptance criteria, and boundary."
+        ),
+    ),
 }

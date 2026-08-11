@@ -24,6 +24,7 @@ _STEP_ALIASES: dict[CustomizationStep, str] = {
     CustomizationStep.STEP_10: "STEP10",
     CustomizationStep.STEP_11: "STEP11",
     CustomizationStep.STEP_12: "STEP12",
+    CustomizationStep.STEP_14: "STEP14",
 }
 
 
@@ -286,6 +287,11 @@ def extract_skeleton(text: str, step: CustomizationStep) -> TemplateSkeleton:
         convention = "markdown_h2"
         sections = [line.strip() for line in lines if _MARKDOWN_H2_RE.match(line.strip())]
     else:
+        # STEP_12 and STEP_14 (the comprehension pass, added .claude/loopr-step14-comprehension/
+        # baby_prd.md 2026-08-11) both use `##`/`###` -- STEP_14's own six MAINTAINED SECTIONS are
+        # `###` subsections nested under one `##` header, so this convention is what makes each of
+        # them individually tracked (and required to survive customization) rather than treated as
+        # opaque prose inside one big section.
         convention = "markdown_h2_h3"
         sections = [line.strip() for line in lines if _MARKDOWN_H2_H3_RE.match(line.strip())]
 
@@ -524,6 +530,32 @@ STEP12_NON_PLACEHOLDER_BRACKET_TOKENS: frozenset[str] = frozenset({"[EXECUTOR]",
 
 STEP12_DOCUMENTATION_MARKERS: tuple[str, ...] = ("[PROJECT_*]",)
 
+# STEP_14 (.claude/loopr-step14-comprehension/baby_prd.md, 2026-08-11): the comprehension pass'
+# own registries, mirroring STEP_11's shape exactly -- same customizer-resolvable token set
+# ([PROJECT_NAME]/[PROJECT_REPO_NAME]/[PROJECT]/[PROJECT_TAG]/[PHASE_COUNT], all gated on step10
+# having actually executed, same as step11/step12), no [EXECUTOR_AGENT_FICTION]-style token (Step 14
+# carries no adversarial-reviewer fiction to name), verified directly against the real STEP_14 file
+# (not transcribed from a table).
+STEP14_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "[PROJECT_NAME]",
+        "[PROJECT_REPO_NAME]",
+        "[PROJECT]",
+        "[PROJECT_TAG]",
+        "[PHASE_COUNT]",
+    }
+)
+
+# [UNVERIFIED]: the SAME tag step10 already emits at runtime (a bracket-shaped tag the executing
+# model writes into its own output, never a placeholder for the customizer to resolve) -- reused
+# deliberately here for Step 14's own domain-figure marking (baby_prd.md's own instruction: "reuses
+# whatever web-search/paper-search/arXiv-MCP capabilities step10 already has", extended to the
+# convention itself, not just the tooling). [ ]: checkbox markup inside the deleted TEMPLATE
+# CUSTOMIZATION CHECKLIST section, same reason as step11/step12's own entries.
+STEP14_NON_PLACEHOLDER_BRACKET_TOKENS: frozenset[str] = frozenset({"[UNVERIFIED]", "[ ]"})
+
+STEP14_DOCUMENTATION_MARKERS: tuple[str, ...] = ("[PROJECT_*]",)
+
 # These are FUNCTIONS, not module-level dict constants, and deliberately so: they are rebuilt from
 # the live STEP<N>_* globals on every call, not snapshotted once at import time. A frozen dict built
 # at import time would silently break monkeypatch-based regression testing of the individual
@@ -537,6 +569,7 @@ def _placeholder_allowlist_by_step() -> dict[CustomizationStep, frozenset[str]]:
         CustomizationStep.STEP_10: STEP10_PLACEHOLDER_ALLOWLIST,
         CustomizationStep.STEP_11: STEP11_PLACEHOLDER_ALLOWLIST,
         CustomizationStep.STEP_12: STEP12_PLACEHOLDER_ALLOWLIST,
+        CustomizationStep.STEP_14: STEP14_PLACEHOLDER_ALLOWLIST,
     }
 
 
@@ -545,6 +578,7 @@ def _non_placeholder_bracket_tokens_by_step() -> dict[CustomizationStep, frozens
         CustomizationStep.STEP_10: NON_PLACEHOLDER_BRACKET_TOKENS,
         CustomizationStep.STEP_11: STEP11_NON_PLACEHOLDER_BRACKET_TOKENS,
         CustomizationStep.STEP_12: STEP12_NON_PLACEHOLDER_BRACKET_TOKENS,
+        CustomizationStep.STEP_14: STEP14_NON_PLACEHOLDER_BRACKET_TOKENS,
     }
 
 
@@ -553,18 +587,22 @@ def _documentation_markers_by_step() -> dict[CustomizationStep, tuple[str, ...]]
         CustomizationStep.STEP_10: (),
         CustomizationStep.STEP_11: STEP11_DOCUMENTATION_MARKERS,
         CustomizationStep.STEP_12: STEP12_DOCUMENTATION_MARKERS,
+        CustomizationStep.STEP_14: STEP14_DOCUMENTATION_MARKERS,
     }
 
 
 def _fill_in_block_markers_by_step() -> dict[CustomizationStep, tuple[str, ...]]:
     return {
         CustomizationStep.STEP_10: STEP10_FILL_IN_BLOCK_MARKERS,
-        # STEP_11 / step_12 have no square-bracket fill-in block of their own -- verified: neither
-        # template contains a `[...]`-delimited multi-line instruction block the way STEP_10's hard
-        # boundary does. Their equivalent conditional content (the citation-gate blocks) uses
-        # `<<...>>` delimiters instead -- see CONDITIONAL_BLOCK_MARKERS below, a separate mechanism.
+        # STEP_11 / step_12 / STEP_14 have no square-bracket fill-in block of their own -- verified:
+        # none of the three contains a `[...]`-delimited multi-line instruction block the way
+        # STEP_10's hard boundary does. STEP_11/step_12's equivalent conditional content (the
+        # citation-gate blocks) uses `<<...>>` delimiters instead -- see CONDITIONAL_BLOCK_MARKERS
+        # below, a separate mechanism; STEP_14 has no citation-gate block at all (no code-boundary or
+        # architecture-anchoring claim to gate -- it is a documentation pass, not a build/review one).
         CustomizationStep.STEP_11: (),
         CustomizationStep.STEP_12: (),
+        CustomizationStep.STEP_14: (),
     }
 
 
@@ -658,12 +696,14 @@ def surviving_customize_markers(text: str) -> list[str]:
 # "remove before..." in step_12) without changing what section it is.
 STEP11_SECTION_DELETIONS: tuple[str, ...] = ("TEMPLATE CUSTOMIZATION CHECKLIST",)
 STEP12_SECTION_DELETIONS: tuple[str, ...] = ("TEMPLATE CUSTOMIZATION CHECKLIST",)
+STEP14_SECTION_DELETIONS: tuple[str, ...] = ("TEMPLATE CUSTOMIZATION CHECKLIST",)
 
 def _section_deletions_by_step() -> dict[CustomizationStep, tuple[str, ...]]:
     return {
         CustomizationStep.STEP_10: (),
         CustomizationStep.STEP_11: STEP11_SECTION_DELETIONS,
         CustomizationStep.STEP_12: STEP12_SECTION_DELETIONS,
+        CustomizationStep.STEP_14: STEP14_SECTION_DELETIONS,
     }
 
 
@@ -708,6 +748,10 @@ def _conditional_block_markers_by_step() -> dict[CustomizationStep, tuple[str, .
         CustomizationStep.STEP_10: (),
         CustomizationStep.STEP_11: STEP11_CONDITIONAL_BLOCK_MARKERS,
         CustomizationStep.STEP_12: STEP12_CONDITIONAL_BLOCK_MARKERS,
+        # STEP_14 has no citation-gate-style conditional block -- it never anchors architecture on a
+        # citation the way step11/step12's own gate blocks do (baby_prd.md non-goal: no new
+        # domain-research tooling or gate mechanism, reuse step10's capabilities as-is).
+        CustomizationStep.STEP_14: (),
     }
 
 

@@ -91,12 +91,24 @@ class CustomizationState(LooprBase):  # type: ignore[explicit-any]  # pydantic B
     step12_output_path: str | None = None
     step12_fidelity: FidelityResult | None = None
 
+    step14_template_path: str | None = None
+    """The comprehension pass's own field group (.claude/loopr-step14-comprehension/baby_prd.md,
+    2026-08-11) -- mirrors step11/step12's shape exactly, kept flat for the same reason the class
+    docstring above already gives (a genuinely fourth field group was flagged and deferred at Phase 2;
+    this is that fourth group, and it is still just one more named, always-known-in-advance set of
+    fields, not the trigger for a dict-keyed rewrite)."""
+    step14_skeleton: TemplateSkeleton | None = None
+    step14_bindings: list[PlaceholderBinding] = Field(default_factory=list)
+    step14_output_path: str | None = None
+    step14_fidelity: FidelityResult | None = None
+
     @model_validator(mode="after")
     def check_output_precedes_fidelity(self) -> "CustomizationState":
         for step_name, path, fidelity in (
             ("step10", self.step10_output_path, self.step10_fidelity),
             ("step11", self.step11_output_path, self.step11_fidelity),
             ("step12", self.step12_output_path, self.step12_fidelity),
+            ("step14", self.step14_output_path, self.step14_fidelity),
         ):
             if fidelity is not None and path is None:
                 raise ValueError(f"{step_name}_fidelity requires {step_name}_output_path to be set first")

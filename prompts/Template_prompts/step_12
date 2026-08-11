@@ -34,12 +34,24 @@ enough to catch these, not just the changed files in isolation.
 
 ## PHASE DISCOVERY (BEFORE ANYTHING ELSE)
 1. List all PHASE_N_SPEC.md at repo root. Sort by N descending.
-2. For each, check git log for: feat: Phase N implementation ([PROJECT_TAG]) (implementation done)
-   and chore: Phase N review approved ([PROJECT_TAG]) (prior review approved).
-3. Current phase to review = highest-N spec with an implementation commit but NO review-approved commit.
-4. If BUILD_COMPLETE.md exists, halt -- all phases done.
-5. If no phase needs review (all built phases approved, no new spec), halt and report.
-Output the current phase and discovery state before proceeding.
+2. For each, check git log for: feat: Phase N implementation ([PROJECT_TAG]) (implementation done),
+   chore: Phase N review approved ([PROJECT_TAG]) (prior review approved), and a subsequent
+   docs: Phase (N+1) technical blueprint ([PROJECT_TAG]) / [PROJECT_TAG] build complete commit
+   (advancement done).
+3. Current phase to review = highest-N spec with an implementation commit but NO review-approved
+   commit. If found: this is a REVIEW dispatch -- run CODE REVIEW through PHASE APPROVAL below, then
+   STOP per PHASE APPROVAL's own stop instruction. Do not run PHASE ADVANCEMENT in this dispatch.
+4. Else, if the highest-N spec has a review-approved commit but NEITHER PHASE_(N+1)_SPEC.md NOR
+   BUILD_COMPLETE.md exists yet: this is an ADVANCEMENT-ONLY dispatch. Step 14 (a separate
+   comprehension-pass subagent) runs between approval and advancement now, dispatched by the
+   architect/driver immediately after a REVIEW dispatch's approval -- by the time this dispatch runs,
+   that has already happened. Skip CODE REVIEW, THE FIX, and PHASE APPROVAL entirely; go straight to
+   PHASE ADVANCEMENT below, for phase N.
+5. If BUILD_COMPLETE.md exists, halt -- all phases done.
+6. If neither 3 nor 4 applies (every built phase is both approved and advanced, no new spec pending),
+   halt and report.
+Output the current phase, which dispatch kind (REVIEW or ADVANCEMENT-ONLY), and discovery state
+before proceeding.
 
 ## CONTEXT INGESTION
 Read:
@@ -119,6 +131,12 @@ Approval is earned, not granted. Do not approve with any open ❌. No "approve w
 follow-ups". Either clean or not. When genuinely flawless:
 1. Commit: chore: Phase N review approved ([PROJECT_TAG]). May be empty -- it's the approval marker
    for discovery. Push to main.
+2. STOP HERE. Do not proceed to PHASE ADVANCEMENT in this dispatch. A mandatory comprehension pass
+   (Step 14, a separate subagent -- .claude/loopr-step14-comprehension/baby_prd.md) now runs between
+   approval and advancement: the architect/driver dispatches it next, and once it completes,
+   re-dispatches this step12 subagent, which PHASE DISCOVERY step 4 above recognises as an
+   ADVANCEMENT-ONLY dispatch and resumes from there. Output the REVIEW form of HANDOFF FORMAT below
+   and stop.
 
 ## PHASE ADVANCEMENT (NEW SPEC GENERATION)
 Once approved, generate PHASE_(N+1)_SPEC.md.
@@ -151,17 +169,23 @@ phases shipped.
 4. Push to main.
 
 ## HANDOFF FORMAT
-Output exactly:
+For a REVIEW dispatch (stopping after PHASE APPROVAL step 2 above), output exactly:
   Phase N review:              APPROVED / FAILED (with reasons)
   [EXECUTOR] deviations found: <count> (or "none")
   Fix patches applied:         <count> (or "none")
   Approval commit:             <SHA>
+  Branch:                      main
+  Status:                      Ready for Step 14 (comprehension pass) / Build halted
+Stop after this line. Do not begin PHASE ADVANCEMENT or implementing Phase (N+1) in this dispatch.
+
+For an ADVANCEMENT-ONLY dispatch (PHASE DISCOVERY step 4 above), output exactly:
+  Phase N advancement:         done
   Citation re-verification:    N/A / PASSED / PROVISIONAL / FAILED  (omit if no citation gate)
   Next spec generated:         PHASE_(N+1)_SPEC.md / BUILD_COMPLETE.md
   Next spec commit:            <SHA>
   Branch:                      main
   Status:                      Ready for Step 11 (build of Phase N+1) / Build complete
-Stop after the handoff line. Do not begin implementing Phase (N+1).
+Stop after this line. Do not begin implementing Phase (N+1).
 
 ***USE YOUR LOCAL FILE-SYSTEM AND GIT TOOLS TO EXPLORE THE REPO/CODEBASE.***
 ***AFTER THE REVIEW + FIX FOR ONE PHASE, PROCEED TO DRAFTING THE NEXT PHASE SPEC.***

@@ -21,21 +21,27 @@ from loopr.customization.customize import (
     STEP10_SUBAGENT_NAME,
     STEP11_SUBAGENT_NAME,
     STEP12_SUBAGENT_NAME,
+    STEP14_SUBAGENT_NAME,
     apply_customization_response,
     apply_fidelity_judge_response,
     apply_step11_customization_response,
     apply_step11_fidelity_judge_response,
     apply_step12_customization_response,
     apply_step12_fidelity_judge_response,
+    apply_step14_customization_response,
+    apply_step14_fidelity_judge_response,
     build_customization_request,
     build_fidelity_judge_request,
     build_step11_customization_request,
     build_step11_fidelity_judge_request,
     build_step12_customization_request,
     build_step12_fidelity_judge_request,
+    build_step14_customization_request,
+    build_step14_fidelity_judge_request,
     render_step10_subagent,
     render_step11_subagent,
     render_step12_subagent,
+    render_step14_subagent,
 )
 from loopr.customization.fidelity import apply_judge_layer, check_fidelity
 from loopr.customization.templates import (
@@ -397,7 +403,9 @@ def cmd_customize(args: argparse.Namespace) -> int:
         return _cmd_customize_step10(args)
     if args.step == 11:
         return _cmd_customize_step11(args)
-    return _cmd_customize_step12(args)
+    if args.step == 12:
+        return _cmd_customize_step12(args)
+    return _cmd_customize_step14(args)
 
 
 def _resolve_override_path(raw: str | None, flag_name: str) -> Path | None | str:
@@ -842,6 +850,116 @@ def _cmd_customize_step12(args: argparse.Namespace) -> int:
     return exit_codes.OK
 
 
+def _cmd_customize_step14(args: argparse.Namespace) -> int:
+    """Implements .claude/loopr-step14-comprehension/baby_prd.md's customize-machinery extension.
+    Mirrors _cmd_customize_step11/_cmd_customize_step12 exactly (same SS1.1-style step10-execution
+    gate, same two-layer fidelity check, same promotion to a dispatchable subagent) -- Step 14 is a
+    separate subagent (the confirmed Gate 2 decision), so it gets the identical customization
+    treatment, even though it is never named by `loopr dispatch`'s own three-target state machine."""
+    overrides = _resolve_step10_artifact_overrides(args)
+    if isinstance(overrides, str):
+        print(f"refusing to customize step14: {overrides}", file=sys.stderr)
+        return exit_codes.HALT
+    prd_override, phase_1_spec_override = overrides
+
+    early_repo_root = Path(StateStore(Path(args.state)).load().repo_root)
+    gate_message = _step10_execution_gate_message(14, early_repo_root, prd_override, phase_1_spec_override)
+    if gate_message is not None:
+        print(gate_message, file=sys.stderr)
+        return exit_codes.HALT
+
+    preamble = _customize_preamble(args)
+    if isinstance(preamble, int):
+        return preamble
+    store, state, state_dir, judge_p, client = preamble
+
+    repo_root = Path(state.repo_root)
+    artifacts = find_step10_execution_artifacts(repo_root, prd_override, phase_1_spec_override)
+    assert artifacts is not None  # already confirmed by the early gate check above
+    _prd_path, phase_1_spec_path = artifacts
+    phase_1_spec_text = phase_1_spec_path.read_text(encoding="utf-8")
+
+    agents_dir = Path(args.out) if args.out else repo_root / ".claude" / "agents"
+    subagent_path = agents_dir / f"{STEP14_SUBAGENT_NAME}.md"
+
+    if state.customization is None:
+        state.customization = CustomizationState()
+    if state.customization.step14_template_path is None:
+        template_path = discover_template(repo_root, CustomizationStep.STEP_14)
+        template_text = template_path.read_text(encoding="utf-8")
+        skeleton = extract_skeleton(template_text, CustomizationStep.STEP_14)
+        gap_candidates = find_gap_candidates(template_text, skeleton.sections)
+        if gap_candidates:
+            print(
+                f"NOTE: gap analysis found {len(gap_candidates)} heading-shaped line(s) not in the "
+                f"extracted skeleton -- review whether any of these is a missed section: "
+                f"{gap_candidates}",
+                file=sys.stderr,
+            )
+        state.customization.step14_template_path = str(template_path)
+        state.customization.step14_skeleton = skeleton
+
+    customization = state.customization
+    assert customization.step14_template_path is not None
+    assert customization.step14_skeleton is not None
+    template_text = Path(customization.step14_template_path).read_text(encoding="utf-8")
+
+    draft_path = state_dir / "step14_draft.md"
+
+    if customization.step14_output_path is None:
+        request = build_step14_customization_request(state, template_text, phase_1_spec_text)
+        response = client.ask(request)
+        if response is None:
+            store.save(state)
+            print(f"judge call required: {judge_p}")
+            return exit_codes.JUDGE_REQUIRED
+        customized_text = apply_step14_customization_response(response)
+        draft_path.parent.mkdir(parents=True, exist_ok=True)
+        draft_path.write_text(customized_text, encoding="utf-8")
+        customization.step14_output_path = str(draft_path)
+        store.save(state)
+
+    if customization.step14_fidelity is None or not customization.step14_fidelity.overall:
+        output_path = Path(customization.step14_output_path)
+        output_text = output_path.read_text(encoding="utf-8")
+
+        output_skeleton = extract_skeleton(output_text, CustomizationStep.STEP_14)
+        structural = check_fidelity(
+            customization.step14_skeleton,
+            output_skeleton,
+            template_text,
+            output_text,
+            CustomizationStep.STEP_14,
+        )
+        if not structural.structural_pass:
+            customization.step14_fidelity = structural
+            store.save(state)
+            print(f"HALT: fidelity check failed structurally: {structural.detail}", file=sys.stderr)
+            return exit_codes.HALT
+
+        fidelity_request = build_step14_fidelity_judge_request(state, template_text, output_text)
+        fidelity_response = client.ask(fidelity_request)
+        if fidelity_response is None:
+            store.save(state)
+            print(f"judge call required: {judge_p}")
+            return exit_codes.JUDGE_REQUIRED
+        judge_passed, judge_reason = apply_step14_fidelity_judge_response(fidelity_response)
+        final = apply_judge_layer(structural, judge_passed, judge_reason)
+        customization.step14_fidelity = final
+        if not final.overall:
+            store.save(state)
+            print(f"HALT: fidelity check failed at layer 2: {judge_reason}", file=sys.stderr)
+            return exit_codes.HALT
+
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        subagent_path.write_text(render_step14_subagent(output_text), encoding="utf-8")
+        customization.step14_output_path = str(subagent_path)
+        store.save(state)
+
+    print(f"step14 customized successfully: {customization.step14_output_path}")
+    return exit_codes.OK
+
+
 def _format_dispatch_state_one_line(dispatch_state: DispatchState) -> str:
     """The one-line state summary `dispatch-complete` prints on success (CUSTOMIZATION_PHASE_3_
     SPEC.md SS4.2). Not `render_human`/`render_json` -- there is no `DispatchDecision` at this point,
@@ -1079,7 +1197,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     customize_p = subparsers.add_parser("customize")
     customize_p.add_argument("--state", required=True)
-    customize_p.add_argument("--step", type=int, required=True, choices=[10, 11, 12])
+    customize_p.add_argument("--step", type=int, required=True, choices=[10, 11, 12, 14])
     customize_p.add_argument("--out", default=None)
     customize_p.add_argument("--judge-response", default=None)
     # Manual override for find_step10_execution_artifacts' SS1.1 gate (2026-08-04): --step 11/12

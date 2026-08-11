@@ -21,6 +21,9 @@ from loopr.customization.templates import (
     STEP12_NON_PLACEHOLDER_BRACKET_TOKENS,
     STEP12_PLACEHOLDER_ALLOWLIST,
     STEP12_SECTION_DELETIONS,
+    STEP14_NON_PLACEHOLDER_BRACKET_TOKENS,
+    STEP14_PLACEHOLDER_ALLOWLIST,
+    STEP14_SECTION_DELETIONS,
     Step10ArtifactAmbiguityError,
     TemplateDiscoveryError,
     VacuousSkeletonError,
@@ -783,3 +786,86 @@ def test_find_step10_execution_artifacts_against_this_repos_own_real_state() -> 
     assert "PHASE_1_SPEC.md" in message
     assert "CUSTOMIZATION_PHASE_3_SPEC.md" in message
     assert "SKILL_PHASE_1_SPEC.md" not in message  # correctly excluded, not a colliding candidate
+
+
+# ============================================================================
+# .claude/loopr-step14-comprehension/baby_prd.md (2026-08-11) -- STEP_14, the comprehension pass.
+# Mirrors STEP_11/step_12's own coverage above: discovery, markdown_h2_h3 skeleton extraction, the
+# independent-oracle bracket-token completeness check, and section deletion, all against the REAL
+# template file, not a synthetic stand-in.
+# ============================================================================
+
+_STEP14_TEXT = (REAL_TEMPLATES_DIR / "STEP_14").read_text(encoding="utf-8")
+
+
+def test_discover_template_finds_step14(templates_repo: Path) -> None:
+    """STEP_14 is discovered the same normalized-name way as the other three -- add it to the same
+    fixture repo used for the inconsistent-naming trap above, confirming its presence doesn't collide
+    with STEP_10/"STEP _11"/step_12's own normalized aliases."""
+    (templates_repo / "prompts" / "Template_prompts" / "STEP_14").write_text(
+        "## ROLE\n\n## OTHER\n", encoding="utf-8"
+    )
+    assert discover_template(templates_repo, CustomizationStep.STEP_14).name == "STEP_14"
+
+
+def test_step14_uses_markdown_h2_h3_convention_and_has_all_six_maintained_sections() -> None:
+    skeleton = extract_skeleton(_STEP14_TEXT, CustomizationStep.STEP_14)
+    assert skeleton.convention == "markdown_h2_h3"
+    numbered = [s for s in skeleton.sections if s.startswith("### ")]
+    assert numbered == [
+        "### 1. Plain-language walkthrough",
+        "### 2. Architecture walkthrough",
+        "### 3. Decisions and tradeoffs",
+        "### 4. Domain mechanics",
+        "### 5. Honesty audit",
+        "### 6. Open items",
+    ]
+    assert "## MAINTAINED SECTIONS (1-6 -- REWRITTEN EACH PHASE, NOT APPENDED)" in skeleton.sections
+    assert "## APPEND-ONLY PHASE LOG" in skeleton.sections
+
+
+def test_step14_bracket_token_classification_is_complete() -> None:
+    """Same independent-oracle completeness discipline as step10/step11/step12 -- a genuinely
+    complete registry returns nothing unclassified from the real file."""
+    unclassified = find_unclassified_bracket_spans(_STEP14_TEXT, CustomizationStep.STEP_14)
+    assert unclassified == [], (
+        f"bracket span(s) found in the real STEP_14 file with no classification: {unclassified}"
+    )
+    assert STEP14_PLACEHOLDER_ALLOWLIST & STEP14_NON_PLACEHOLDER_BRACKET_TOKENS == set()
+
+
+def test_step14_placeholder_allowlist_matches_step11_shape() -> None:
+    """Step 14 has no [EXECUTOR_AGENT_FICTION]-equivalent token (no adversarial-reviewer fiction to
+    name) -- its allowlist is exactly STEP_11's shape, not STEP_12's."""
+    assert STEP14_PLACEHOLDER_ALLOWLIST == STEP11_PLACEHOLDER_ALLOWLIST
+
+
+def test_step14_unverified_tag_is_reused_not_a_placeholder() -> None:
+    """[UNVERIFIED] is reused deliberately from step10's own runtime-emitted convention (baby_prd.md:
+    domain figures are marked [UNVERIFIED] when uncited) -- never a placeholder for the customizer."""
+    assert "[UNVERIFIED]" in STEP14_NON_PLACEHOLDER_BRACKET_TOKENS
+    found = inventory_placeholders(_STEP14_TEXT, CustomizationStep.STEP_14)
+    assert "[UNVERIFIED]" not in found
+
+
+def test_step14_expected_output_sections_drops_only_the_checklist() -> None:
+    skeleton = extract_skeleton(_STEP14_TEXT, CustomizationStep.STEP_14)
+    expected = expected_output_sections(skeleton.sections, CustomizationStep.STEP_14)
+    assert len(expected) == len(skeleton.sections) - 1
+    assert all("TEMPLATE CUSTOMIZATION CHECKLIST" not in s for s in expected)
+    assert STEP14_SECTION_DELETIONS == ("TEMPLATE CUSTOMIZATION CHECKLIST",)
+
+
+def test_step14_surviving_customize_markers_detected_in_real_file() -> None:
+    """Same convention as STEP_11/step_12's own TEMPLATE STATUS paragraph and per-field customize
+    instructions -- real <<CUSTOMIZE: ...>> markers must be found, not silently missed."""
+    markers = surviving_customize_markers(_STEP14_TEXT)
+    assert any("PRD filename" in m for m in markers)
+
+
+def test_step14_has_no_fill_in_blocks_or_conditional_blocks() -> None:
+    """Unlike STEP_10 (hard-boundary fill-in block) and STEP_11/step_12 (citation-gate conditional
+    block), Step 14 is a documentation pass with neither -- verified directly against the real file,
+    not assumed by omission."""
+    assert find_fill_in_blocks(_STEP14_TEXT, CustomizationStep.STEP_14) == []
+    assert find_conditional_blocks(_STEP14_TEXT, CustomizationStep.STEP_14) == []

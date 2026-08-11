@@ -20,15 +20,18 @@ from loopr.customization.customize import (
     STEP10_SUBAGENT_NAME,
     STEP11_ALLOWLIST_INPUT_DEPENDENCIES,
     STEP12_ALLOWLIST_INPUT_DEPENDENCIES,
+    STEP14_ALLOWLIST_INPUT_DEPENDENCIES,
     apply_customization_response,
     build_customization_request,
     build_step11_customization_request,
     build_step12_customization_request,
+    build_step14_customization_request,
 )
 from loopr.customization.templates import (
     STEP10_PLACEHOLDER_ALLOWLIST,
     STEP11_PLACEHOLDER_ALLOWLIST,
     STEP12_PLACEHOLDER_ALLOWLIST,
+    STEP14_PLACEHOLDER_ALLOWLIST,
     find_fill_in_blocks,
     find_unclassified_bracket_spans,
     unresolved_placeholders,
@@ -547,8 +550,16 @@ def test_step12_customization_request_carries_correct_repo_root_value(tmp_path: 
     assert request.inputs["repo_root"] == str(tmp_path / "my-project")
 
 
+def test_step14_customization_request_carries_correct_repo_root_value(tmp_path: Path) -> None:
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root=str(tmp_path / "my-project"))
+    request = build_step14_customization_request(
+        state, template_text="template body", phase_1_spec_text="**Phase 1 of 3.**"
+    )
+    assert request.inputs["repo_root"] == str(tmp_path / "my-project")
+
+
 def test_fidelity_judge_requests_do_not_carry_repo_root() -> None:
-    """Scoped narrowly, per the fix's own instruction: repo_root belongs to the three CUSTOMIZATION
+    """Scoped narrowly, per the fix's own instruction: repo_root belongs to the four CUSTOMIZATION
     call types only -- fidelity judging only checks the customization judge's already-drafted
     output, it never resolves anything itself, so adding repo_root there would be scope creep, not
     part of this fix."""
@@ -556,6 +567,7 @@ def test_fidelity_judge_requests_do_not_carry_repo_root() -> None:
         build_fidelity_judge_request,
         build_step11_fidelity_judge_request,
         build_step12_fidelity_judge_request,
+        build_step14_fidelity_judge_request,
     )
 
     state = InterrogationState(mode=Mode.GREENFIELD, repo_root="/some/repo")
@@ -563,6 +575,7 @@ def test_fidelity_judge_requests_do_not_carry_repo_root() -> None:
         build_fidelity_judge_request(state, template_text="t", customized_text="c"),
         build_step11_fidelity_judge_request(state, template_text="t", customized_text="c"),
         build_step12_fidelity_judge_request(state, template_text="t", customized_text="c"),
+        build_step14_fidelity_judge_request(state, template_text="t", customized_text="c"),
     ):
         assert "repo_root" not in request.inputs
 
@@ -573,6 +586,7 @@ def test_fidelity_judge_requests_do_not_carry_repo_root() -> None:
         ("step10", STEP10_PLACEHOLDER_ALLOWLIST, STEP10_ALLOWLIST_INPUT_DEPENDENCIES),
         ("step11", STEP11_PLACEHOLDER_ALLOWLIST, STEP11_ALLOWLIST_INPUT_DEPENDENCIES),
         ("step12", STEP12_PLACEHOLDER_ALLOWLIST, STEP12_ALLOWLIST_INPUT_DEPENDENCIES),
+        ("step14", STEP14_PLACEHOLDER_ALLOWLIST, STEP14_ALLOWLIST_INPUT_DEPENDENCIES),
     ],
 )
 def test_allowlist_input_dependencies_are_complete(
@@ -619,6 +633,17 @@ def test_allowlist_input_dependencies_are_true_for_step11_and_step12() -> None:
         for token, needed_keys in dependencies.items():
             missing = needed_keys - actual_keys
             assert not missing, f"{token} declares dependency on {missing}, absent from the request"
+
+
+def test_allowlist_input_dependencies_are_true_for_step14() -> None:
+    state = InterrogationState(mode=Mode.GREENFIELD, repo_root="/some/repo")
+    request14 = build_step14_customization_request(
+        state, template_text="template body", phase_1_spec_text="**Phase 1 of 3.**"
+    )
+    actual_keys = set(request14.inputs.keys())
+    for token, needed_keys in STEP14_ALLOWLIST_INPUT_DEPENDENCIES.items():
+        missing = needed_keys - actual_keys
+        assert not missing, f"{token} declares dependency on {missing}, absent from the request"
 
 
 def test_full_step10_run_resolves_project_name_repo_name_and_prd_filename_with_no_unclassified_spans(

@@ -66,6 +66,13 @@ class JudgeCallType(str, Enum):
     conditional include-or-replace) are all resolved within ONE holistic drafted_text response per
     call, exactly as step10's fill and fill-in-block resolution already are -- no new JudgeResponse
     field or shape was needed."""
+    STEP14_CUSTOMIZATION = "step14_customization"
+    STEP14_FIDELITY_JUDGE = "step14_fidelity_judge"
+    """The comprehension pass's own customization + fidelity pair (.claude/loopr-step14-comprehension/
+    baby_prd.md, confirmed 2026-08-11). Same shape and same two-layer discipline as step11/step12 --
+    Step 14 is a separate SUBAGENT (the confirmed Gate 2 decision), so it gets the same customization
+    treatment as step10/11/12, even though it is never a `loopr dispatch` target (see DispatchTarget's
+    own docstring: still closed at three members)."""
 
 
 class QuestionStatus(str, Enum):
@@ -112,11 +119,18 @@ class CustomizationStep(str, Enum):
     """Identifies which template a discovery/skeleton-extraction result belongs to. All three exist
     as a type since template discovery must handle all three on-disk files' inconsistent naming
     (CUSTOMIZATION_PHASE_1_SPEC.md SS4.2) -- only STEP_10 is wired to the `loopr customize` CLI in
-    Phase 1; STEP_11/STEP_12 customization itself is Phase 2, not built here."""
+    Phase 1; STEP_11/STEP_12 customization itself is Phase 2, not built here.
+
+    STEP_14 (added .claude/loopr-step14-comprehension/baby_prd.md, 2026-08-11): the comprehension
+    pass's own template identity, for `loopr customize --step 14` and CustomizationState's step14_*
+    field group. It is deliberately NOT a DispatchTarget member -- Step 14 is architect/driver
+    dispatched directly after a step12 APPROVED completion, never named by `decide()`'s own
+    three-target state machine (see DispatchTarget's docstring, unchanged)."""
 
     STEP_10 = "step_10"
     STEP_11 = "step_11"
     STEP_12 = "step_12"
+    STEP_14 = "step_14"
 
 
 class DispatchTarget(str, Enum):

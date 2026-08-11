@@ -77,6 +77,17 @@ STEP12_ALLOWLIST_INPUT_DEPENDENCIES: dict[str, frozenset[str]] = {
     "[EXECUTOR_AGENT_FICTION]": frozenset(),
 }
 
+STEP14_ALLOWLIST_INPUT_DEPENDENCIES: dict[str, frozenset[str]] = {
+    "[PROJECT_NAME]": frozenset({"repo_root"}),
+    "[PROJECT_REPO_NAME]": frozenset({"repo_root"}),
+    "[PROJECT]": frozenset({"repo_root"}),
+    "[PROJECT_TAG]": frozenset({"repo_root"}),
+    "[PHASE_COUNT]": frozenset({"phase_1_spec_text"}),
+}
+"""Identical shape to STEP11_ALLOWLIST_INPUT_DEPENDENCIES (.claude/loopr-step14-comprehension/
+baby_prd.md, 2026-08-11) -- Step 14 has no [EXECUTOR_AGENT_FICTION]-equivalent token, so there is no
+step12-style empty-frozenset entry to carry over."""
+
 
 def build_customization_request(state: InterrogationState, template_text: str) -> JudgeRequest:
     inputs: dict[str, JsonValue] = {
@@ -261,6 +272,68 @@ def apply_step12_fidelity_judge_response(response: JudgeResponse) -> tuple[bool,
     return response.passed, response.reason
 
 
+def build_step14_customization_request(
+    state: InterrogationState, template_text: str, phase_1_spec_text: str
+) -> JudgeRequest:
+    """Mirrors build_step11_customization_request exactly -- same input shape, different call type
+    and rubric (.claude/loopr-step14-comprehension/baby_prd.md, 2026-08-11)."""
+    inputs: dict[str, JsonValue] = {
+        "template_text": template_text,
+        "phase_1_spec_text": phase_1_spec_text,
+        "repo_root": state.repo_root,
+        "problem_statement": state.problem_statement,
+        "acceptance_criteria": [c.text for c in state.acceptance_criteria],
+        "scope_edges": [e.item for e in state.scope_edges],
+        "boundary": state.boundary.text if state.boundary is not None else None,
+        "context_notes": [n.text for n in state.context_notes],
+        "conformance_summary": _conformance_summary(state),
+    }
+    rubric = RUBRICS[JudgeCallType.STEP14_CUSTOMIZATION]
+    call_id = make_call_id(JudgeCallType.STEP14_CUSTOMIZATION.value, state.round, inputs)
+    return JudgeRequest(
+        call_id=call_id,
+        call_type=JudgeCallType.STEP14_CUSTOMIZATION,
+        rubric_id=rubric.rubric_id,
+        rubric_text=rubric.text,
+        inputs=inputs,
+        created_round=state.round,
+    )
+
+
+def apply_step14_customization_response(response: JudgeResponse) -> str:
+    if response.drafted_text is None:
+        raise CustomizationError("STEP14_CUSTOMIZATION response must carry drafted_text")
+    return response.drafted_text
+
+
+def build_step14_fidelity_judge_request(
+    state: InterrogationState, template_text: str, customized_text: str
+) -> JudgeRequest:
+    inputs: dict[str, JsonValue] = {
+        "template_text": template_text,
+        "customized_text": customized_text,
+        "problem_statement": state.problem_statement,
+        "acceptance_criteria": [c.text for c in state.acceptance_criteria],
+        "boundary": state.boundary.text if state.boundary is not None else None,
+    }
+    rubric = RUBRICS[JudgeCallType.STEP14_FIDELITY_JUDGE]
+    call_id = make_call_id(JudgeCallType.STEP14_FIDELITY_JUDGE.value, state.round, inputs)
+    return JudgeRequest(
+        call_id=call_id,
+        call_type=JudgeCallType.STEP14_FIDELITY_JUDGE,
+        rubric_id=rubric.rubric_id,
+        rubric_text=rubric.text,
+        inputs=inputs,
+        created_round=state.round,
+    )
+
+
+def apply_step14_fidelity_judge_response(response: JudgeResponse) -> tuple[bool, str]:
+    if response.passed is None:
+        raise CustomizationError("STEP14_FIDELITY_JUDGE response must carry passed")
+    return response.passed, response.reason
+
+
 # Subagent dispatch (CUSTOMIZATION_PHASE_1_SPEC.md SS1, SS6.1a, amended 2026-08-03; extended to
 # step11/step12 by CUSTOMIZATION_PHASE_2_SPEC.md SS0/SS2). FIXED CONFIGURATION, written directly from
 # constants here -- never a JudgeRequest input, never a JudgeResponse field, never touched by any
@@ -302,6 +375,18 @@ STEP12_SUBAGENT_DESCRIPTION = (
     "implementation against its spec and the project's invariants, then advances to the next phase "
     "spec on approval. Use once `loopr customize --step 12` has produced a fidelity-verified "
     "customization and step10 has executed for this project."
+)
+
+STEP14_SUBAGENT_NAME = "loopr-step14"
+STEP14_SUBAGENT_MODEL = "sonnet"
+STEP14_SUBAGENT_EFFORT: str | None = "medium"
+STEP14_SUBAGENT_DESCRIPTION = (
+    "Runs this project's customized step14 prompt -- a comprehension pass, dispatched as a separate "
+    "subagent immediately after step12 reports a phase APPROVED and before PHASE ADVANCEMENT "
+    "proceeds. Reads the real, current code for the approved phase and writes/updates "
+    "COMPREHENSION.md at repo root (six maintained sections plus an append-only phase log). Use once "
+    "`loopr customize --step 14` has produced a fidelity-verified customization and step10 has "
+    "executed for this project."
 )
 
 
@@ -351,5 +436,15 @@ def render_step12_subagent(body: str) -> str:
         description=STEP12_SUBAGENT_DESCRIPTION,
         model=STEP12_SUBAGENT_MODEL,
         effort=STEP12_SUBAGENT_EFFORT,
+        body=body,
+    )
+
+
+def render_step14_subagent(body: str) -> str:
+    return _render_subagent(
+        name=STEP14_SUBAGENT_NAME,
+        description=STEP14_SUBAGENT_DESCRIPTION,
+        model=STEP14_SUBAGENT_MODEL,
+        effort=STEP14_SUBAGENT_EFFORT,
         body=body,
     )

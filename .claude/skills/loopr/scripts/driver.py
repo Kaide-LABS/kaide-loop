@@ -21,16 +21,32 @@ guards below (round cap, no-progress) compare already-structured DispatchDecisio
 target, build_round) for exact equality across log records -- the same class of deterministic,
 total-over-a-small-space mechanism decide() itself is, never a heuristic guess over free text.
 
-Three subcommands:
-  dispatch    Wraps `loopr dispatch --json` (plus this script's two safety guards, both exit HALT/40
-              like a real loopr HALT). Logs the outcome and prints the CLI's own output unmodified.
-  complete    Wraps `loopr dispatch-complete`. Logs the outcome and prints the CLI's own output
-              unmodified.
-  log-stop    Pure bookkeeping: appends a STOP entry the session supplies verbatim (never inspects or
-              validates its content) so the two judgment-based stop conditions (a genuine gate/judge/
-              question moment inside a dispatched subagent's own run, and a step12 escalation-eligible
-              UNCERTAIN item) are recoverable from driver-log.jsonl alongside the two this script's
-              own control flow can see (HALT, COMPLETE) -- baby_prd.md acceptance criterion 1/5.
+Four subcommands:
+  dispatch        Wraps `loopr dispatch --json` (plus this script's safety guards, all exit HALT/40
+                  like a real loopr HALT). Logs the outcome and prints the CLI's own output unmodified.
+  complete        Wraps `loopr dispatch-complete`. Logs the outcome and prints the CLI's own output
+                  unmodified. Added 2026-08-11 (.claude/loopr-step14-comprehension/baby_prd.md): an
+                  APPROVING step12 completion (`--verdict clean`/`minor`) now refuses -- guard_halt,
+                  never silently proceeding -- unless a `step14_ok` record already covers the build
+                  round that completion would close. This is what makes "Step 14 dispatches after
+                  every step12 APPROVED completion, before proceeding to the next dispatch call" a
+                  real control-flow constraint rather than a documentation-only convention: a
+                  `spec_violating` verdict is unaffected (no phase was approved, nothing to
+                  comprehend yet), and this never touches `loopr dispatch`'s own decide() routing --
+                  it is a guard purely on THIS script's own `complete` call, structural and
+                  zero-judgment like the two `dispatch`-side guards below.
+  step14-complete Pure bookkeeping, same shape as `log-stop`: the session calls this AFTER
+                  dispatching `loopr-step14` via the Agent tool and confirming (by reading its own
+                  real output, never something this script inspects) that it produced a genuine
+                  HANDOFF. Records the build_round the most recent `dispatch_ok` named, so `complete`
+                  above can check it later. Never parses or validates COMPREHENSION.md's content
+                  itself -- that judgment stays with the session per baby_prd.md's own framing.
+  log-stop        Pure bookkeeping: appends a STOP entry the session supplies verbatim (never inspects
+                  or validates its content) so the two judgment-based stop conditions (a genuine gate/
+                  judge/question moment inside a dispatched subagent's own run, and a step12
+                  escalation-eligible UNCERTAIN item) are recoverable from driver-log.jsonl alongside
+                  the states this script's own control flow can see directly (HALT, COMPLETE) --
+                  baby_prd.md acceptance criterion 1/5.
 
 The log: one JSON object per line, `sort_keys=True`, append-only, timestamped here (never by the
 wrapped CLI) -- same convention as src/loopr/dispatch/log.py's `dispatch-log.jsonl` and the
@@ -142,6 +158,39 @@ def _check_guards(log_path: Path, max_rounds: int) -> str | None:
     return None
 
 
+def _check_step14_guard(log_path: Path) -> str | None:
+    """Structural guard, added 2026-08-11 (.claude/loopr-step14-comprehension/baby_prd.md): an
+    APPROVING step12 completion (`complete --verdict clean/minor`) must not be logged until a
+    `step14_ok` record has been logged for the SAME build_round -- Step 14's comprehension pass runs
+    strictly between step12's PHASE APPROVAL and PHASE ADVANCEMENT (this build's own confirmed Gate 2
+    decision), and `loopr dispatch-complete --verdict clean/minor` is what finally records the phase
+    as done, which is what lets `loopr dispatch` route past it. Compares only already-logged,
+    already-structured fields (the last `dispatch_ok` record's `decision.build_round`, and any
+    `step14_ok` record's own `build_round`) -- never a subagent's own output text, matching this
+    file's zero-judgment discipline exactly like `_check_guards` above. Returns a HALT message, or
+    None if clear to proceed."""
+    records = _read(log_path)
+    dispatch_ok_records = [r for r in records if r.get("kind") == "dispatch_ok"]
+    if not dispatch_ok_records:
+        return None  # nothing dispatched yet this state -- not this guard's job to diagnose that
+
+    decision = dispatch_ok_records[-1]["decision"]
+    assert isinstance(decision, dict)
+    last_round = decision["build_round"]
+    step14_rounds = {r["build_round"] for r in records if r.get("kind") == "step14_ok"}
+
+    if last_round not in step14_rounds:
+        return (
+            f"an approving step12 completion (--verdict clean/minor) was requested for "
+            f"build_round={last_round!r}, but no step14_ok record has been logged for that round yet "
+            "-- Step 14 (the comprehension pass) must run between step12's PHASE APPROVAL and this "
+            "completion. Dispatch loopr-step14 via the Agent tool, confirm it produced a real "
+            "handoff, then run `python .claude/skills/loopr/scripts/driver.py step14-complete "
+            "--state <path>` before retrying this completion."
+        )
+    return None
+
+
 def cmd_dispatch(args: argparse.Namespace) -> int:
     state_path = Path(args.state)
     log_path = _driver_log_path(state_path)
@@ -192,6 +241,13 @@ def cmd_complete(args: argparse.Namespace) -> int:
     state_path = Path(args.state)
     log_path = _driver_log_path(state_path)
 
+    if args.verdict in ("clean", "minor"):
+        guard_failure = _check_step14_guard(log_path)
+        if guard_failure is not None:
+            _append(log_path, "guard_halt", {"reason": guard_failure})
+            print(f"HALT: {guard_failure}", file=sys.stderr)
+            return _HALT
+
     cli_args = ["dispatch-complete", "--state", str(state_path)]
     if args.verdict is not None:
         cli_args += ["--verdict", args.verdict]
@@ -217,6 +273,34 @@ def cmd_complete(args: argparse.Namespace) -> int:
     if stderr:
         print(stderr, file=sys.stderr)
     return code
+
+
+def cmd_step14_complete(args: argparse.Namespace) -> int:
+    """Pure bookkeeping -- see module docstring. Called only by the session, after dispatching
+    `loopr-step14` via the Agent tool and reading its own real output well enough to confirm it
+    produced a genuine handoff (this script never reads or validates that output itself). Tags the
+    resulting `step14_ok` record with the build_round the most recent `dispatch_ok` named, so
+    `_check_step14_guard` can later confirm an approving `complete` call for that same round is
+    covered -- never asks the session to supply the round itself (a value it would have no
+    structured way to know without re-deriving what `dispatch_ok` already recorded)."""
+    state_path = Path(args.state)
+    log_path = _driver_log_path(state_path)
+
+    dispatch_ok_records = [r for r in _read(log_path) if r.get("kind") == "dispatch_ok"]
+    if not dispatch_ok_records:
+        print(
+            "HALT: no dispatch_ok record found in this state's driver log -- nothing has been "
+            "dispatched yet, so there is no build_round for a step14_ok record to cover.",
+            file=sys.stderr,
+        )
+        return _HALT
+
+    decision = dispatch_ok_records[-1]["decision"]
+    assert isinstance(decision, dict)
+    build_round = decision["build_round"]
+    _append(log_path, "step14_ok", {"build_round": build_round})
+    print(f"logged: kind=step14_ok build_round={build_round!r}")
+    return _OK
 
 
 def cmd_log_stop(args: argparse.Namespace) -> int:
@@ -253,6 +337,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--verdict", choices=["clean", "minor", "spec_violating"], default=None
     )
     complete_p.set_defaults(func=cmd_complete)
+
+    step14_complete_p = sub.add_parser("step14-complete")
+    step14_complete_p.add_argument("--state", required=True)
+    step14_complete_p.set_defaults(func=cmd_step14_complete)
 
     log_stop_p = sub.add_parser("log-stop")
     log_stop_p.add_argument("--state", required=True)

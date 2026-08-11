@@ -706,6 +706,17 @@ The high-stakes ways loopr fails, front-loaded so the audit-of-loopr and the bui
    as a template rather than avoided) -- reverted. Unreliable verbatim compliance is accepted as a
    permanent limitation, not a TODO, since step12 reviews the actual code output regardless of
    halt-message polish.
+8. **Step 14 -- a mandatory comprehension pass now runs after every phase closes, any loopr-driven
+   build (2026-08-11, confirmed via a real `/loopr` interrogation, `.claude/loopr-step14-comprehension/
+   baby_prd.md`).** A new subagent (`loopr-step14`), dispatched by the architect/driver strictly
+   between step12's PHASE APPROVAL and PHASE ADVANCEMENT, writing/maintaining `COMPREHENSION.md` at
+   the target repo's root. Requires a disclosed amendment to step12's own template (both
+   `prompts/Template_prompts/step_12` and `.claude/agents/loopr-step12.md`): it now stops after
+   approval and resumes advancement only on a second, ADVANCEMENT-ONLY sub-dispatch, detected by its
+   own PHASE DISCOVERY. Full detail in the baby PRD and the new template/customize machinery
+   (`prompts/Template_prompts/STEP_14`, `src/loopr/customization/`), not restated here -- same
+   short-disclosure convention as items 6/7. Not a fourth `loopr dispatch` target (`decide()`/
+   `DispatchState` unchanged).
 
 Prove 1 before touching 2-4. This replaces an earlier version of this section that assumed skill
 packaging and the Docker-ported loop were the near-term path; both were superseded by the sequencing

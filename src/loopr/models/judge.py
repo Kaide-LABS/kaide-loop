@@ -174,15 +174,50 @@ ALLOWED_INPUTS_V5: Mapping[JudgeCallType, frozenset[str]] = {
     | {"repo_root"},
 }
 
+# v6 (2026-08-11): adds Step 14's own customization + fidelity pair (.claude/loopr-step14-
+# comprehension/baby_prd.md) -- a wholly new call type pair, same shape as STEP11_CUSTOMIZATION/
+# STEP11_FIDELITY_JUDGE (including `repo_root` from the start, unlike v3's original STEP10_
+# CUSTOMIZATION -- v5's fix is folded in directly here rather than re-discovering it live against a
+# fourth call type). No existing call type's scope changes, so this bump exists only because a new
+# call type was added, matching BOUNDARY_PROPOSAL's own v2 precedent of "safe to add directly," made
+# a real version bump here anyway for symmetry with how step11/step12 themselves were introduced (v4)
+# -- explicit and auditable over implicit-safe-because-new.
+ALLOWED_INPUTS_V6: Mapping[JudgeCallType, frozenset[str]] = {
+    **ALLOWED_INPUTS_V5,
+    JudgeCallType.STEP14_CUSTOMIZATION: frozenset(
+        {
+            "template_text",
+            "phase_1_spec_text",
+            "repo_root",
+            "problem_statement",
+            "acceptance_criteria",
+            "scope_edges",
+            "boundary",
+            "context_notes",
+            "conformance_summary",
+        }
+    ),
+    JudgeCallType.STEP14_FIDELITY_JUDGE: frozenset(
+        {
+            "template_text",
+            "customized_text",
+            "problem_statement",
+            "acceptance_criteria",
+            "boundary",
+        }
+    ),
+}
+
 ALLOWED_INPUTS_BY_VERSION: Mapping[int, Mapping[JudgeCallType, frozenset[str]]] = {
     1: ALLOWED_INPUTS_V1,
     2: ALLOWED_INPUTS_V2,
     3: ALLOWED_INPUTS_V3,
     4: ALLOWED_INPUTS_V4,
     5: ALLOWED_INPUTS_V5,
+    6: ALLOWED_INPUTS_V6,
 }
 
-CURRENT_ENVELOPE_VERSION = 5
+CURRENT_ENVELOPE_VERSION = 6
 
 # The live scope, for callers building NEW requests (checks/conditions.py, tests). Always the
 # highest entry in ALLOWED_INPUTS_BY_VERSION -- kept as a top-level name for backward compatibility.

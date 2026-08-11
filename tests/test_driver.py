@@ -300,6 +300,126 @@ def test_no_progress_guard_halts_on_identical_repeated_decisions(
     assert "identical" in records[-1]["reason"]
 
 
+def test_complete_with_approving_verdict_refuses_without_step14_ok(tmp_path: Path) -> None:
+    """The core, functional Step 14 gate (.claude/loopr-step14-comprehension/baby_prd.md, 2026-08-11):
+    an APPROVING step12 completion (--verdict clean/minor) must not be logged until step14-complete
+    has recorded a step14_ok entry for the SAME build_round -- otherwise the driver would let the
+    loop proceed straight past step12's approval into the next dispatch with Step 14 never having
+    run, exactly the sequencing this build exists to make load-bearing rather than advisory."""
+    state_path = _init_state(tmp_path)
+    dispatch_result = _run_driver(["dispatch", "--state", str(state_path)])
+    assert dispatch_result.returncode == exit_codes.OK  # names loopr-step10, build_round=0
+
+    result = _run_driver(["complete", "--state", str(state_path), "--verdict", "clean"])
+
+    assert result.returncode == exit_codes.HALT
+    assert "step14" in result.stderr.lower()
+
+    records = _driver_log_records(state_path)
+    assert records[-1]["kind"] == "guard_halt"
+    assert "step14_ok" in records[-1]["reason"]
+
+    # And the real CLI was never invoked for this refused completion -- state stays whatever the
+    # prior dispatch left it as, not advanced by a completion that should not have been allowed.
+    from loopr.state.store import StateStore
+
+    state = StateStore(state_path).load()
+    assert state.dispatch.active_step is not None  # dispatch-complete never ran
+
+
+def _seed_step12_active_with_dispatch_ok_record(state_path: Path, *, build_round: int = 0) -> None:
+    """Puts the real state into `active_step=STEP_12` (so the real `loopr dispatch-complete
+    --verdict ...` the guard eventually lets through will actually succeed, not USAGE-refuse for a
+    verdict on a non-step12 completion) and seeds a matching `dispatch_ok` driver-log record (so the
+    guard has a build_round to check against) -- without driving a full step10->step11->step12
+    lifecycle, which these guard-focused tests have no need to exercise."""
+    from loopr.models.common import CustomizationStep
+    from loopr.state.store import StateStore
+
+    store = StateStore(state_path)
+    state = store.load()
+    state.dispatch.active_step = CustomizationStep.STEP_12
+    state.dispatch.build_round = build_round
+    store.save(state)
+
+    log_path = state_path.parent / "driver-log.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "kind": "dispatch_ok",
+                    "ts": "2026-08-11T00:00:00Z",
+                    "decision": {
+                        "state_id": "s6_step12_in_flight",
+                        "target": "loopr-step12",
+                        "reason": "step12 is already the active step; resuming it.",
+                        "step10_warrant": None,
+                        "step10_declined_because": "step10 artifacts present on disk; no --remodernize given.",
+                        "build_round": build_round,
+                    },
+                }
+            )
+            + "\n"
+        )
+
+
+def test_complete_with_approving_verdict_succeeds_after_step14_complete(tmp_path: Path) -> None:
+    """The unblocked path: once step14-complete has logged a step14_ok record for the current
+    build_round, the same completion that was refused above now proceeds normally."""
+    state_path = _init_state(tmp_path)
+    _seed_step12_active_with_dispatch_ok_record(state_path, build_round=1)
+
+    step14_result = _run_driver(["step14-complete", "--state", str(state_path)])
+    assert step14_result.returncode == exit_codes.OK
+
+    records_before = _driver_log_records(state_path)
+    assert records_before[-1]["kind"] == "step14_ok"
+    assert records_before[-1]["build_round"] == 1
+
+    result = _run_driver(["complete", "--state", str(state_path), "--verdict", "clean"])
+    assert result.returncode == exit_codes.OK, result.stderr
+
+    records = _driver_log_records(state_path)
+    assert records[-1]["kind"] == "complete_ok"
+
+
+def test_complete_with_spec_violating_verdict_is_never_gated_by_step14(tmp_path: Path) -> None:
+    """A spec_violating verdict means the phase was NOT approved -- no step14 comprehension pass is
+    owed for a round that never got approved, so this completion must never be blocked by the guard,
+    with or without a step14_ok record on the log."""
+    state_path = _init_state(tmp_path)
+    _seed_step12_active_with_dispatch_ok_record(state_path, build_round=1)
+
+    result = _run_driver(["complete", "--state", str(state_path), "--verdict", "spec_violating"])
+    assert result.returncode == exit_codes.OK, result.stderr
+
+    records = _driver_log_records(state_path)
+    assert records[-1]["kind"] == "complete_ok"
+
+
+def test_complete_with_no_verdict_is_never_gated_by_step14(tmp_path: Path) -> None:
+    """A step10/step11 completion (`--verdict` omitted entirely) is likewise never subject to this
+    guard -- it is scoped narrowly to an APPROVING step12 completion, per the guard's own docstring."""
+    state_path = _init_state(tmp_path)
+    _run_driver(["dispatch", "--state", str(state_path)])
+
+    result = _run_driver(["complete", "--state", str(state_path)])
+    assert result.returncode == exit_codes.OK, result.stderr
+
+    records = _driver_log_records(state_path)
+    assert records[-1]["kind"] == "complete_ok"
+
+
+def test_step14_complete_halts_when_nothing_dispatched_yet(tmp_path: Path) -> None:
+    state_path = _init_state(tmp_path)
+
+    result = _run_driver(["step14-complete", "--state", str(state_path)])
+
+    assert result.returncode == exit_codes.HALT
+    assert "no dispatch_ok record" in result.stderr
+
+
 @pytest.mark.parametrize("bad_max_rounds", [1])
 def test_round_cap_does_not_false_positive_on_legitimate_ping_pong(
     tmp_path: Path, bad_max_rounds: int

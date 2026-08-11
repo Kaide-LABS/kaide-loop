@@ -148,30 +148,34 @@ path refuses outright with `HALT`, printing both state paths and both problem st
 stderr and pointing at `--out <dir>` to target somewhere else. If you see that refusal, do not
 retry the same command -- pick a distinct `--out` directory per project instead.
 
-### 4. Customize step 10, step 11, step 12 (optional, once COMPLETE)
+### 4. Customize step 10, step 11, step 12, step 14 (optional, once COMPLETE)
 
 ```
 loopr customize --state <target>/.loopr-state/state.json --step 10
 loopr customize --state <target>/.loopr-state/state.json --step 11
 loopr customize --state <target>/.loopr-state/state.json --step 12
+loopr customize --state <target>/.loopr-state/state.json --step 14
 ```
 
 Produces a genuinely customized prompt from the confirmed artifacts -- not a template with
 placeholders merely deleted -- and delivers it as a dispatchable subagent:
 `<target>/.claude/agents/loopr-step10.md` (Opus), `loopr-step11.md` (Sonnet, low effort),
-`loopr-step12.md` (Sonnet, high effort). Handle exit codes the same way as `step`: `10`
-`JUDGE_REQUIRED` (answer the customization or fidelity-judgment call honestly, same discipline as any
-other judge call, then re-invoke with `--judge-response`), `0` `OK` (done -- the subagent file is at
-the printed path, ready to dispatch), `40` `HALT` (the fidelity check rejected the customization, or
--- step11/step12 only -- step10 has not actually *executed* against this project yet: a
-fidelity-passing step10 prompt is not the same as having run it, so its real deliverables, a
-modernised PRD and `PHASE_1_SPEC.md`, must already exist on disk. A restructured template or generic
-filler is likewise a real failure, never silently retried; nothing is ever written to
-`.claude/agents/` until it's cleared). step11 and step12 don't depend on each other -- customize
-either first, or in parallel. Session topology never matters here: this reads only the state file and
+`loopr-step12.md` (Sonnet, high effort), `loopr-step14.md` (Sonnet, medium effort -- the mandatory
+comprehension pass, `.claude/loopr-step14-comprehension/baby_prd.md`; dispatched as a SEPARATE
+subagent from step12, never a fourth `loopr dispatch` target, see step 7's own note on this). Handle
+exit codes the same way as `step`: `10` `JUDGE_REQUIRED` (answer the customization or
+fidelity-judgment call honestly, same discipline as any other judge call, then re-invoke with
+`--judge-response`), `0` `OK` (done -- the subagent file is at the printed path, ready to dispatch),
+`40` `HALT` (the fidelity check rejected the customization, or -- step11/step12/step14 only -- step10
+has not actually *executed* against this project yet: a fidelity-passing step10 prompt is not the same
+as having run it, so its real deliverables, a modernised PRD and `PHASE_1_SPEC.md`, must already exist
+on disk. A restructured template or generic filler is likewise a real failure, never silently retried;
+nothing is ever written to `.claude/agents/` until it's cleared). step11, step12, and step14 don't
+depend on each other -- customize any of them first, or in parallel; all three gate only on step10's
+own real execution artifacts. Session topology never matters here: this reads only the state file and
 confirmed artifacts, so whether you're the same session that ran the interrogation or a fresh one
 makes no difference to the result. Once step10 (at minimum) is customized, step 5 below decides which
-customized subagent actually runs next.
+customized subagent actually runs next -- step14 is never one of the names it can return; see step 7.
 
 ### 5. Dispatch -- decide which subagent runs next (optional, once at least step10 is customized)
 
@@ -189,6 +193,15 @@ whatever it names -- do not re-derive the decision yourself, and do not second-g
 dispatching `loopr-step10` anyway "to be safe": an unrecognised or incoherent state HALTs by design
 (`loopr-PRD.md` section 6 B6, PROJECT HARD BOUNDARY) and printing the state for a human to look at is
 the correct behaviour, not a gap to route around.
+
+`loopr-step12` can be named here TWICE for the same phase before this controller moves on -- a REVIEW
+sub-dispatch (approves, then stops) and, after you dispatch `loopr-step14` yourself in between, an
+ADVANCEMENT-ONLY sub-dispatch (drafts the next spec). `decide()` cannot tell these apart; it only
+sees `active_step=STEP_12` both times. Step 7's driver automates recognising which is which from each
+sub-dispatch's own HANDOFF FORMAT and dispatching Step 14 between them -- if you are driving this
+manually rather than via step 7, apply that same sequencing by hand: never call `dispatch-complete
+--verdict clean/minor` until AFTER the ADVANCEMENT-ONLY sub-dispatch, with `loopr-step14` dispatched
+and its own real output read in between.
 
 `--modernized-prd-path` / `--phase-1-spec-path` (same override flags `customize --step 11/12` has):
 a mature repo can legitimately carry more than one valid phase-spec artifact permanently (this
@@ -227,9 +240,16 @@ append-only dispatch log for every `loopr-step10` call and fails if any lacks a 
 
 Not part of `loopr dispatch`'s routing table -- `decide()` stays a deterministic, zero-LLM state
 machine with exactly three targets (`loopr-step10`/`loopr-step11`/`loopr-step12`); the auditor is
-never a fourth thing it can name. This is a separate, architect-initiated act, only ever taken after
+never a fourth thing it can name, and neither is `loopr-step14` (step 7 below covers Step 14's own,
+unrelated dispatch). This is a separate, architect-initiated act, only ever taken after
 `loopr-step12` has already run and flagged a specific item as `UNCERTAIN` (confidence below
 threshold) or as touching a correctness-critical path regardless of confidence.
+
+Do not conflate the auditor with Step 14: the auditor adjudicates a single flagged item on the
+architect's own initiative, optional, and only ever engaged mid-review; Step 14 is mandatory,
+dispatched by the architect/driver after EVERY step12 APPROVED completion (never mid-review, never
+optional), and produces `COMPREHENSION.md`, not a verdict on one item. Both are separate subagents
+outside `decide()`'s three-target state machine, but for otherwise-unrelated reasons.
 
 **You (the architect), not step12, decide to dispatch.** Never let step12 self-escalate -- a
 confidently-wrong reviewer will not recognise it needs help, which is exactly when help is needed.
@@ -277,9 +297,29 @@ and judgment-free (calling `loopr dispatch`/`dispatch-complete`, parsing exit co
 mechanical action to `driver-log.jsonl`, a THIRD log alongside `dispatch-log.jsonl` and
 `auditor-log.jsonl` in the same state directory) and hands back to you, the session, exactly what to
 do next. It makes zero LLM calls and contains zero judgment logic of its own -- grep it; the only
-things it branches on are exit codes and the small set of already-structured `DispatchDecision` fields
-its two safety guards (a round cap, and a same-decision-three-times-in-a-row no-progress check)
-compare for exact equality, never decision *text*.
+things it branches on are exit codes and the small set of already-structured `DispatchDecision`/log
+fields its safety guards (a round cap, a same-decision-three-times-in-a-row no-progress check, and --
+added 2026-08-11 for Step 14, see below -- a same-build-round `step14_ok` check) compare for exact
+equality, never decision or subagent-output *text*.
+
+**Step 14 and this loop (`.claude/loopr-step14-comprehension/baby_prd.md`, confirmed 2026-08-11):**
+`loopr dispatch`'s own `decide()` is UNCHANGED and still knows nothing about Step 14 -- it is never a
+fourth target. Instead, `loopr-step12` itself now runs in up to two separate sub-dispatches for the
+same phase, both reported by `loopr dispatch` as the SAME decision (`S6_STEP12_IN_FLIGHT`, target
+`loopr-step12`) because `state.dispatch.active_step` stays `STEP_12` across both:
+  - **A REVIEW sub-dispatch** -- `.claude/agents/loopr-step12.md`'s own PHASE DISCOVERY finds an
+    implementation with no review-approved commit yet. It runs CODE REVIEW through PHASE APPROVAL,
+    commits the approval, and stops -- its HANDOFF FORMAT ends `Status: Ready for Step 14
+    (comprehension pass)`, never reaching PHASE ADVANCEMENT.
+  - **An ADVANCEMENT-ONLY sub-dispatch** -- PHASE DISCOVERY instead finds a review-approved commit
+    with no next-phase spec yet, skips CODE REVIEW entirely, and goes straight to PHASE ADVANCEMENT
+    (drafting `PHASE_(N+1)_SPEC.md` or `BUILD_COMPLETE.md`). Its HANDOFF FORMAT starts `Phase N
+    advancement: done`.
+Step 14 (`loopr-step14`) is dispatched by you, the architect/driver, strictly BETWEEN these two --
+never by `loopr dispatch` itself, and never in the same `Task(...)` call as either step12 sub-dispatch.
+`driver.py complete --verdict clean/minor` now structurally refuses (`guard_halt`) unless a
+`step14-complete` call has already logged a `step14_ok` record for the CURRENT `dispatch_ok`'s
+build_round -- this is what makes the sequencing load-bearing rather than merely documented here.
 
 **The loop, one round at a time:**
 
@@ -288,35 +328,53 @@ compare for exact equality, never decision *text*.
    (same override flags step 5's `loopr dispatch` takes, forwarded verbatim; `--max-rounds` defaults
    to 20 -- a structural circuit breaker against a driver bug repeating real subagent side effects, not
    a rework-cap policy, see the file's own docstring).
-   - Exit `40` (HALT) -- from `loopr dispatch` itself, or from the driver's own two safety guards. Read
+   - Exit `40` (HALT) -- from `loopr dispatch` itself, or from the driver's own safety guards. Read
      the printed block. **STOP.** Surface it to the human. Do not dispatch anything, especially not on
      your own initiative "to be safe."
    - Exit `50` (COMPLETE) -- the build is done. Stop; nothing left to run.
    - Exit `0` (OK) -- parse the printed decision's `target` field and dispatch it yourself:
      `Task(subagent_type="<target>")`. This is the one step only you can do.
 2. Read the dispatched subagent's own output in full, the same way you already would without this
-   driver. Two things only you can judge (never the script, never a heuristic):
+   driver. The things only you can judge (never the script, never a heuristic):
    - **A genuine gate/judge/question moment inside that subagent's own run** (it asks a real question,
      halts on an unrecoverable issue, needs a decision only a human can make). If so: run
      `python .claude/skills/loopr/scripts/driver.py log-stop --state <path> --kind subagent_gate
      --subagent <target> --reason "<why>"`, then **STOP** and surface it. Do not call `complete`.
-   - **If the target was `loopr-step12`:** scan its PER-ITEM VERDICT TRACKING output for an
-     escalation-eligible `UNCERTAIN` item (per `.claude/agents/loopr-step12.md`: low confidence, or
-     Hard Invariant Preservation / Hard Boundary category regardless of confidence). If found: escalate
-     exactly per step 6 above -- extract the item's spec clause, file/line, and step12's written reason
-     (never the full diff, never a reimplemented extraction), dispatch `loopr-auditor`, append its
-     verdict to `auditor-log.jsonl` (step 6's exact snippet), then run
+   - **If the target was `loopr-step12` and its HANDOFF FORMAT is the REVIEW form** (`Status: Ready
+     for Step 14 (comprehension pass)`): first, scan its PER-ITEM VERDICT TRACKING output for an
+     escalation-eligible `UNCERTAIN` item, exactly as before (below). Then -- whether or not an
+     escalation happened -- dispatch `Task(subagent_type="loopr-step14")` yourself, read its own
+     output in full to confirm it produced a genuine HANDOFF (this is your judgment, never the
+     script's), and run `python .claude/skills/loopr/scripts/driver.py step14-complete --state
+     <path>`. Do **NOT** call `complete` for this round -- go back to step 1: `loopr dispatch` will
+     report the SAME decision again (`loopr-step12`, still in flight), and this time
+     `.claude/agents/loopr-step12.md`'s own PHASE DISCOVERY resumes as the ADVANCEMENT-ONLY
+     sub-dispatch. Only once THAT sub-dispatch's HANDOFF FORMAT (`Phase N advancement: done`) has been
+     read does this round reach step 3 below and call `complete`.
+   - **If the target was `loopr-step12`'s escalation-eligible `UNCERTAIN` item check applies** (per
+     `.claude/agents/loopr-step12.md`: low confidence, or Hard Invariant Preservation / Hard Boundary
+     category regardless of confidence) -- on the REVIEW sub-dispatch only, never the
+     ADVANCEMENT-ONLY one, which runs no code review at all. If found: escalate exactly per step 6
+     above -- extract the item's spec clause, file/line, and step12's written reason (never the full
+     diff, never a reimplemented extraction), dispatch `loopr-auditor`, append its verdict to
+     `auditor-log.jsonl` (step 6's exact snippet), then run
      `python .claude/skills/loopr/scripts/driver.py log-stop --state <path> --kind step12_uncertain
-     --subagent loopr-step12 --reason "<item + auditor verdict summary>"`, then **STOP** and surface
-     the auditor's verdict. The driver does not chain into `complete` for this round on its own --
-     a genuine escalation is a human-awareness point even once the auditor has resolved it, not merely
-     a delay until it resolves.
-3. Otherwise -- a clean completion, no gate, no escalation-eligible `UNCERTAIN` item -- run
+     --subagent loopr-step12 --reason "<item + auditor verdict summary>"` before moving on to
+     dispatching `loopr-step14` above. A genuine escalation is a human-awareness point even once the
+     auditor has resolved it, not merely a delay until it resolves -- but it does not on its own stop
+     the round the way a subagent_gate does; Step 14 and eventual advancement still follow.
+3. Otherwise -- a clean completion (an ADVANCEMENT-ONLY step12 sub-dispatch, or a `loopr-step10`/
+   `loopr-step11` completion), no gate, no escalation-eligible `UNCERTAIN` item pending -- run
    `python .claude/skills/loopr/scripts/driver.py complete --state <path> [--verdict
-   clean|minor|spec_violating]` (verdict only when the completed step was `loopr-step12`), then go back
-   to step 1 immediately. **No human-authored command in between** -- you (the session) chain this on
-   your own initiative, the same discipline the rest of this skill already applies to `loopr step`'s
-   `OK`/exit-`0` re-invoke loop.
+   clean|minor|spec_violating]` (verdict only when the completed step was `loopr-step12`; note this is
+   the SAME `--verdict` value the REVIEW sub-dispatch already established -- carry it forward to this
+   later `complete` call, do not re-derive it from the ADVANCEMENT-ONLY sub-dispatch, which makes no
+   review verdict of its own), then go back to step 1 immediately. **No human-authored command in
+   between** -- you (the session) chain this on your own initiative, the same discipline the rest of
+   this skill already applies to `loopr step`'s `OK`/exit-`0` re-invoke loop. If `--verdict clean` or
+   `minor` is given here without a matching `step14_ok` record already logged for this build round
+   (the sequencing above skipped), `complete` structurally refuses (`guard_halt`) rather than silently
+   letting the round close without its comprehension pass.
 
 `driver-log.jsonl` is the full audit trail: every `dispatch_ok` / `dispatch_halt` /
 `dispatch_complete_terminal` / `complete_ok` / `complete_error` / `stop_subagent_gate` /
